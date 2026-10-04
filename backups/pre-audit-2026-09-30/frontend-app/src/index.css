@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+:root {
+  --palette-wood: #6b3512;
+  --palette-wood-dark: #3c1f0c;
+  --palette-teal: #14b8a6;
+  --palette-amber: #f59e0b;
+}
+
+html,
+body {
+  background: #1c130c;
+  color: #f5efe6;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+input,
+textarea,
+select {
+  outline: none;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--palette-teal);
+  box-shadow: 0 0 0 1px var(--palette-teal);
+}
+
+/* ---------- Document A4 ---------- */
+.a4-sheet {
+  background: #ffffff;
+  color: #1c1917;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm;
+  margin: 0 auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media screen and (max-width: 640px) {
+  .a4-sheet {
+    width: 100%;
+    min-height: auto;
+    padding: 12mm 5mm;
+    font-size: 12px;
+  }
+}
+
+/* ---------- Impression ---------- */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-root {
+    padding: 0 !important;
+  }
+  .a4-sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+    width: 210mm;
+    min-height: auto;
+    padding: 12mm 14mm;
+  }
+  .table-wrap {
+    overflow: visible !important;
+  }
+  .print-break-avoid {
+    break-inside: avoid;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a3524;
+  border-radius: 8px;
+}

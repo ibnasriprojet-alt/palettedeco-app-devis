@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+/* ============================================================
+   Jetons de thème
+   Le sombre et le clair partagent les MÊMES noms de variables :
+   les composants utilisent bg-surface / text-ink / border-line
+   et n'ont jamais besoin d'une variante `dark:`.
+   ============================================================ */
+:root,
+.dark {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+:root {
+  --app: #f6f2ec;
+  --surface: #ffffff;
+  --surface-2: #faf7f2;
+  --surface-3: #efe8dc;
+  --line: #e6ded0;
+  --line-2: #d6cbb8;
+  --hover: rgb(60 40 20 / 6%);
+  --subtle: rgb(60 40 20 / 4%);
+  --ink: #241a12;
+  --ink-2: #4b4038;
+  --ink-3: #6b6156;
+  --ink-4: #8c8277;
+  --accent: #0d9488;
+  --accent-hover: #0f766e;
+  --accent-ink: #ffffff;
+  --brand-2: #b45309;
+  --brand-soft: rgb(245 158 11 / 12%);
+  --brand-line: rgb(180 83 9 / 30%);
+  --success: #047857;
+  --success-soft: rgb(16 185 129 / 12%);
+  --success-line: rgb(4 120 87 / 30%);
+  --danger: #b91c1c;
+  --danger-soft: rgb(239 68 68 / 10%);
+  --danger-line: rgb(185 28 28 / 30%);
+  --ring: #14b8a6;
+  --scrollbar: #d6cbb8;
+}
+
+.dark {
+  --app: #1c130c;
+  --surface: #251710;
+  --surface-2: #2a1b10;
+  --surface-3: #3c2a1a;
+  --line: rgb(255 255 255 / 10%);
+  --line-2: rgb(255 255 255 / 16%);
+  --hover: rgb(255 255 255 / 10%);
+  --subtle: rgb(255 255 255 / 5%);
+  --ink: #f5efe6;
+  --ink-2: #d6d3d1;
+  --ink-3: #a8a29e;
+  --ink-4: #78716c;
+  --accent: #14b8a6;
+  --accent-hover: #0fb69f;
+  --accent-ink: #0c1413;
+  --brand-2: #f59e0b;
+  --brand-soft: rgb(245 158 11 / 12%);
+  --brand-line: rgb(245 158 11 / 30%);
+  --success: #6ee7b7;
+  --success-soft: rgb(16 185 129 / 15%);
+  --success-line: rgb(110 231 183 / 25%);
+  --danger: #fca5a5;
+  --danger-soft: rgb(239 68 68 / 10%);
+  --danger-line: rgb(248 113 113 / 25%);
+  --ring: #14b8a6;
+  --scrollbar: #4a3524;
+}
+
+@theme inline {
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-hover: var(--hover);
+  --color-subtle: var(--subtle);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-ink: var(--accent-ink);
+  --color-brand-2: var(--brand-2);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-line: var(--brand-line);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+}
+
+html,
+body {
+  background: var(--app);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+input,
+textarea,
+select {
+  outline: none;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+/* ---------- Document A4 ----------
+   Le document est du PAPIER : il reste blanc avec une encre sombre dans les
+   deux thèmes. Redéfinir les jetons ici suffit à neutraliser le thème pour tout
+   le contenu de la feuille, sans toucher au markup. */
+.a4-sheet {
+  --app: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f5f5f4;
+  --surface-3: #f5f5f4;
+  --line: #d6d3d1;
+  --line-2: #d6d3d1;
+  --hover: rgb(0 0 0 / 5%);
+  --subtle: rgb(0 0 0 / 4%);
+  --ink: #1c1917;
+  --ink-2: #292524;
+  --ink-3: #57534e;
+  --ink-4: #78716c;
+  --success: #047857;
+  --success-soft: #ecfdf5;
+  --success-line: #6ee7b7;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  background: #ffffff;
+  color: #1c1917;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 18mm 16mm;
+  margin: 0 auto;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media screen and (max-width: 640px) {
+  .a4-sheet {
+    width: 100%;
+    min-height: auto;
+    padding: 12mm 5mm;
+    font-size: 12px;
+  }
+}
+
+/* ---------- Impression ---------- */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  @page {
+    size: A4;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-root {
+    padding: 0 !important;
+  }
+  .a4-sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+    width: 210mm;
+    min-height: auto;
+    padding: 12mm 14mm;
+  }
+  .table-wrap {
+    overflow: visible !important;
+  }
+  .print-break-avoid {
+    break-inside: avoid;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 8px;
+}

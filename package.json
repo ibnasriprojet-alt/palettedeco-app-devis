@@ -1,0 +1,29 @@
+{
+  "name": "palette-devis-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:api": "neon dev",
+    "deploy": "neon deploy --env .env.local",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:status": "neon config status",
+    "build:web": "node scripts/build-web.mjs --url https://br-noisy-poetry-b2aw6oyh-api.compute.c-6.eu-central-1.aws.neon.tech",
+    "test:api": "tsx scripts/test-cockpit.ts",
+    "test:facturx": "tsx scripts/test-facturx.ts",
+    "test:ui": "cd app && tsx scripts/smoke-dom.tsx",
+    "test": "npm run test:facturx && npm run test:api"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@neon/config": "^1.5.0",
+    "@neon/functions": "^0.8.0",
+    "@types/node": "^22.20.4",
+    "fast-xml-parser": "^5.11.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.0"
+  }
+}
