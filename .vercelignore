@@ -1,0 +1,11 @@
+app/
+backups/
+.agents/
+.opencode/
+.esbtmp/
+sql/
+scripts/
+.env*
+logo*.png
+logo paletted&co.png
+.git

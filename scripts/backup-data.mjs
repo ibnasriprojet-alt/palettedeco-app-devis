@@ -61,6 +61,10 @@ async function dump(envFile, label) {
   const env = loadEnv(envFile);
   const c = clientFrom(env.DATABASE_URL_UNPOOLED || env.DATABASE_URL);
   await c.connect();
+  /* regclass rend les noms de tables nus si le schema est dans le search_path :
+     indispensable pour que pg_get_constraintdef / pg_get_indexdef ne produisent
+     pas des references qualifiees que la restauration ne saurait pas relier. */
+  await c.query("SET search_path TO public");
   const tables = (
     await c.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name",
@@ -88,6 +92,27 @@ async function dump(envFile, label) {
   for (const s of sequences) sql += `\nCREATE SEQUENCE IF NOT EXISTS "${s}";\n`;
   if (sequences.length) sql += `\n-- ---------- sequences (${sequences.length}) ----------\n`;
 
+  /* DROP TABLE supprime aussi les sequences qu'elle possede (OWNED BY) :
+     elles etaient creees en tete de fichier, puis detruites avant le
+     CREATE TABLE qui les reference via nextval() -> "sequence does not
+     exist". On les reemet donc juste apres le DROP de leur table. */
+  const ownedRows = (
+    await c.query(
+      `SELECT t.relname AS table_name, s.relname AS seq_name
+       FROM pg_class s
+       JOIN pg_depend d ON d.objid = s.oid AND d.classid = 'pg_class'::regclass
+         AND d.refclassid = 'pg_class'::regclass AND d.deptype IN ('a','i')
+       JOIN pg_class t ON t.oid = d.refobjid
+       JOIN pg_namespace n ON n.oid = s.relnamespace AND n.nspname = 'public'
+       WHERE s.relkind = 'S' ORDER BY t.relname, s.relname`,
+    )
+  ).rows;
+  const ownedByTable = new Map();
+  for (const r of ownedRows) {
+    if (!ownedByTable.has(r.table_name)) ownedByTable.set(r.table_name, []);
+    ownedByTable.get(r.table_name).push(r.seq_name);
+  }
+
   for (const t of tables) {
     const cols = (
       await c.query(
@@ -98,12 +123,20 @@ async function dump(envFile, label) {
     ).rows;
     const defs = cols
       .map((col) => {
-        const type = /^(smallint|integer|bigint)$/.test(col.data_type) ? "bigint" : col.data_type;
+        /* Type reel de la colonne, sans conversion : forcer bigint sur des
+           integer cassait le retour du pilote (int8 -> string) et faussait
+           les types du schéma restaure. */
+        const type = col.data_type;
         const def = col.column_default ? ` DEFAULT ${col.column_default}` : "";
         return `  "${col.column_name}" ${type}${def}${col.is_nullable === "NO" ? " NOT NULL" : ""}`;
       })
       .join(",\n");
-    sql += `\n-- ---------- ${t} ----------\nDROP TABLE IF EXISTS "${t}" CASCADE;\nCREATE TABLE "${t}" (\n${defs}\n);\n`;
+    const recreate = (ownedByTable.get(t) ?? [])
+      .map((s) => `CREATE SEQUENCE IF NOT EXISTS "${s}";`)
+      .join("\n");
+    sql += `\n-- ---------- ${t} ----------\nDROP TABLE IF EXISTS "${t}" CASCADE;\n`;
+    if (recreate) sql += `${recreate}\n`;
+    sql += `CREATE TABLE "${t}" (\n${defs}\n);\n`;
 
     /* Les colonnes date/timestamp sans fuseau sont lues en texte par le SQL :
        le pilote les convertit sinon en Date (decalees d'un jour en UTC) et le
@@ -120,7 +153,10 @@ async function dump(envFile, label) {
        un ordre arbitraire et le setval() plus bas positionne la sequence sur
        la derniere ligne du scan au lieu du plus grand id. Les identifiants
        suivants entraient alors en collision avec une ligne existante. */
-    const rows = (await c.query(`SELECT ${selectList} FROM "${t}" ORDER BY id`)).rows;
+    /* ORDER BY id uniquement si la table en a une : counters (kind,value)
+       n'en possede pas et le dump echouait sur `column "id" does not exist`. */
+    const order = cols.some((col) => col.column_name === "id") ? ` ORDER BY "id"` : "";
+    const rows = (await c.query(`SELECT ${selectList} FROM "${t}"${order}`)).rows;
     if (rows.length) {
       const names = cols.map((col) => `"${col.column_name}"`).join(", ");
       for (const row of rows) {
@@ -150,6 +186,48 @@ async function dump(envFile, label) {
     }
     sql += `-- ${rows.length} ligne(s) dans ${t}\n`;
   }
+
+  /* --- Contraintes (PK / UNIQUE / CHECK puis FK) ---
+     Posees une fois toutes les tables creees : l'ordre alphabetique de creation
+     ne garantit pas qu'une table referencee existe deja. Droppees par le
+     DROP TABLE CASCADE du restore, elles sont donc toujours re-creables. */
+  const constraints = (
+    await c.query(
+      `SELECT cl.relname AS tbl, co.conname, pg_get_constraintdef(co.oid) AS def,
+              CASE co.contype WHEN 'p' THEN 0 WHEN 'u' THEN 1 WHEN 'c' THEN 2 WHEN 'f' THEN 3 ELSE 4 END AS ord
+       FROM pg_constraint co
+       JOIN pg_class cl ON cl.oid = co.conrelid
+       JOIN pg_namespace n ON n.oid = co.connamespace
+       WHERE n.nspname = 'public' AND co.contype IN ('p','u','c','f')
+       ORDER BY ord, cl.relname, co.conname`,
+    )
+  ).rows;
+  if (constraints.length) {
+    sql += `\n-- ---------- contraintes (${constraints.length}) ----------\n`;
+    for (const co of constraints) {
+      sql += `ALTER TABLE "${co.tbl}" ADD CONSTRAINT "${co.conname}" ${co.def};\n`;
+    }
+  }
+
+  /* --- Index simples (ceux des contraintes PK/UNIQUE sont crees par l'ADD CONSTRAINT) --- */
+  const indexes = (
+    await c.query(
+      `SELECT pg_get_indexdef(i.indexrelid) AS def
+       FROM pg_index i
+       JOIN pg_class c ON c.oid = i.indexrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       LEFT JOIN pg_constraint con ON con.conindid = i.indexrelid
+       WHERE n.nspname = 'public' AND con.oid IS NULL
+       ORDER BY c.relname`,
+    )
+  ).rows;
+  if (indexes.length) {
+    sql += `\n-- ---------- index (${indexes.length}) ----------\n`;
+    for (const ix of indexes) {
+      sql += `${ix.def.replace(/\s+ON\s+/i, " ON ").trim()};\n`;
+    }
+  }
+
   sql += "\nCOMMIT;\n";
   await c.end();
   writeFileSync(out, sql);

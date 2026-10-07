@@ -21,10 +21,10 @@ function loadLocalEnv() {
 
 const env = loadLocalEnv();
 const token = env.API_TOKEN;
+const urlIdx = process.argv.indexOf("--url");
 const url =
-  process.argv.find((a, i) => a === "--url" && i + 1 < process.argv.length) ||
+  (urlIdx !== -1 ? process.argv[urlIdx + 1] : "") ||
   env.VITE_API_URL ||
-  env.NEON_FUNCTION_API_BASE_URL ||
   "";
 
 if (!token) {

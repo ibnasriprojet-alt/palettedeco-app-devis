@@ -8,3 +8,5 @@ build/
 .env
 app/dist/
 app/node_modules/
+.vercel
+.env*

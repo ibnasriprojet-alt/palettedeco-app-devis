@@ -8,7 +8,7 @@
  * mais la conformite PDF/A-3 n'est pas encore verifiee par un validateur externe.
  * Le statut de la facture le rappelle dans /api/invoices/:id/compliance.
  */
-import { xmlEscape } from "./settings";
+import { xmlEscape } from "./settings.js";
 
 const dec2 = (n: unknown) => (Math.round(Number(n || 0) * 100) / 100).toFixed(2);
 /** Date ISO AAAA-MM-JJ, ou la date du jour si la valeur est absente. */

@@ -1,5 +1,5 @@
 /**
- * Applique un script SQL de schema sur Neon.
+ * Applique un script SQL de schema sur la base PostgreSQL cible.
  *
  * Regle du projet : toute migration doit etre 100% additive.
  * Ce runner refuse donc le fichier si un ordre destructif est detecte

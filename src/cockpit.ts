@@ -6,9 +6,9 @@
  * qui redirige vers l'adresse de test tant que le mode Reel n'est pas actif.
  */
 import type pg from "pg";
-import { loadAppSettings, resolveRecipient, DEFAULT_SETTINGS, type AppSettings } from "./settings";
-import { DEFAULT_REMINDER_TEMPLATES, type ReminderTemplate } from "./reminder-templates";
-import { buildFacturxXml, type FxInvoice } from "./facturx";
+import { loadAppSettings, resolveRecipient, DEFAULT_SETTINGS, type AppSettings } from "./settings.js";
+import { DEFAULT_REMINDER_TEMPLATES, type ReminderTemplate } from "./reminder-templates.js";
+import { buildFacturxXml, type FxInvoice } from "./facturx.js";
 import type { Hono } from "hono";
 
 type Ctx = {

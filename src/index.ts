@@ -2,9 +2,9 @@ import { Hono } from "hono";
 import pg from "pg";
 import { attachDatabasePool } from "@neon/functions";
 import PDFDocument from "pdfkit";
-import { registerCockpit } from "./cockpit";
-import { loadAppSettings, resolveRecipient } from "./settings";
-import { buildFacturxXml, facturxXmp } from "./facturx";
+import { registerCockpit } from "./cockpit.js";
+import { loadAppSettings, resolveRecipient } from "./settings.js";
+import { buildFacturxXml, facturxXmp } from "./facturx.js";
 
 pg.types.setTypeParser(1082, (v) => v);
 

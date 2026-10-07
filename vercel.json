@@ -1,0 +1,8 @@
+{
+  "regions": ["cdg1"],
+  "rewrites": [
+    { "source": "/health", "destination": "/api/[[...slug]]?slug=health" },
+    { "source": "/version", "destination": "/api/[[...slug]]?slug=version" },
+    { "source": "/api/(.*)", "destination": "/api/[[...slug]]" }
+  ]
+}
