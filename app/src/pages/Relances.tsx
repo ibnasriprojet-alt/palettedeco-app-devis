@@ -19,6 +19,9 @@ export default function Relances() {
   const [sending, setSending] = useState<(ReminderTarget & { level: number }) | null>(null);
   const [previewData, setPreviewData] = useState<ReminderPreview | null>(null);
   const [log, setLog] = useState<{ id: number; invoice_number: string; level: number; status: string; sent_at: string | null; redirected_to_test: boolean; client: string }[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [batchConfirm, setBatchConfirm] = useState(false);
+  const [batchResult, setBatchResult] = useState<{ ok: boolean; sent: number; failed: number } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +55,45 @@ export default function Relances() {
 
   const totalRetard = items.reduce((s, i) => s + Number(i.reste), 0);
   const actionnables = items.filter((i) => i.actionnable);
+  const overdueCount = items.filter((i) => i.en_retard).length;
+
+  const selectedItems = actionnables.filter((i) => selected.has(i.id));
+  const allSelected = actionnables.length > 0 && selectedItems.length === actionnables.length;
+  const selectedTotal = selectedItems.reduce((s, i) => s + Number(i.reste), 0);
+
+  const toggle = (id: number) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(actionnables.map((i) => i.id)));
+  const toggleClient = (clientId: number | null) => {
+    if (clientId == null) return;
+    const ids = actionnables.filter((i) => i.client_id === clientId).map((i) => i.id);
+    setSelected((prev) => {
+      const n = new Set(prev);
+      const allChecked = ids.length > 0 && ids.every((id) => n.has(id));
+      ids.forEach((id) => (allChecked ? n.delete(id) : n.add(id)));
+      return n;
+    });
+  };
+
+  const confirmBatch = async () => {
+    if (!selectedItems.length) return;
+    setBatchResult(null);
+    try {
+      const r = await api.sendRemindersBatch(selectedItems.map((i) => i.id));
+      setSelected(new Set());
+      setBatchResult(r);
+      setBatchConfirm(false);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+      setBatchConfirm(false);
+    }
+  };
 
   return (
     <>
@@ -86,11 +128,12 @@ export default function Relances() {
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <Card className="p-4">
-          <div className="text-xs uppercase tracking-wide text-ink-4">Factures en retard</div>
+          <div className="text-xs uppercase tracking-wide text-ink-4">Factures impayées</div>
           <div className="mt-1 text-2xl font-semibold">{items.length}</div>
+          {overdueCount > 0 && <div className="mt-0.5 text-xs text-danger">{overdueCount} en retard</div>}
         </Card>
         <Card className="p-4">
-          <div className="text-xs uppercase tracking-wide text-ink-4">Montant en souffrance</div>
+          <div className="text-xs uppercase tracking-wide text-ink-4">Montant à recouvrer</div>
           <div className="mt-1 text-2xl font-semibold text-danger">{eur(totalRetard)}</div>
         </Card>
         <Card className="p-4">
@@ -106,14 +149,60 @@ export default function Relances() {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<MailCheck className="h-6 w-6" />}
-          title="Aucune facture en retard"
-          text="Toutes vos factures sont à jour. Les relances apparaîtront ici dès qu'une facture dépassera son échéance."
+          title="Aucune facture impayée"
+          text="Toutes vos factures sont réglées. Les relances apparaîtront ici pour les factures impayées ou en retard."
         />
       ) : (
-        <Card className="overflow-hidden">
+        <>
+          {batchResult && (
+            <div
+              className={cn(
+                "mb-3 rounded-lg border px-3.5 py-2.5 text-sm",
+                batchResult.failed > 0
+                  ? "border-danger-line bg-danger-soft text-danger"
+                  : "border-success-line bg-success-soft text-success",
+              )}
+            >
+              {batchResult.sent} relance(s) envoyée(s)
+              {batchResult.failed > 0 ? `, ${batchResult.failed} échec(s).` : " — sélection réinitialisée."}
+            </div>
+          )}
+
+          {selectedItems.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand-line bg-brand-soft px-3.5 py-2.5 text-sm text-brand-2">
+              <span>
+                <strong>{selectedItems.length}</strong> relance(s) sélectionnée(s) — reste dû{" "}
+                <strong>{eur(selectedTotal)}</strong>
+              </span>
+              <button
+                onClick={toggleAll}
+                className="text-xs font-medium underline underline-offset-2 transition hover:text-accent"
+              >
+                Tout effacer
+              </button>
+              <button
+                onClick={() => setBatchConfirm(true)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-ink transition hover:bg-accent-hover"
+              >
+                <Send className="h-3.5 w-3.5" /> Envoyer la sélection ({selectedItems.length})
+              </button>
+            </div>
+          )}
+
+          <Card className="overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-4">
+                <th className="w-12 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    aria-label="Tout sélectionner"
+                    className="h-4 w-4 cursor-pointer accent-[var(--accent)]"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    disabled={actionnables.length === 0}
+                  />
+                </th>
                 <th className="px-4 py-3">Facture</th>
                 <th className="hidden px-4 py-3 md:table-cell">Client</th>
                 <th className="px-4 py-3">Retard</th>
@@ -124,7 +213,20 @@ export default function Relances() {
             </thead>
             <tbody>
               {items.map((t) => (
-                <tr key={t.id} className="border-b border-line last:border-0 hover:bg-subtle">
+                <tr key={t.id} className={cn("border-b border-line last:border-0 hover:bg-subtle", selected.has(t.id) && "bg-brand-soft")}>
+                  <td className="px-4 py-2.5">
+                    {t.actionnable ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`Sélectionner ${t.number}`}
+                        className="h-4 w-4 cursor-pointer accent-[var(--accent)]"
+                        checked={selected.has(t.id)}
+                        onChange={() => toggle(t.id)}
+                      />
+                    ) : (
+                      <span className="text-ink-4">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5">
                     <Link to={`/invoices/${t.id}`} className="font-medium hover:text-accent hover:underline">
                       {t.number}
@@ -132,11 +234,30 @@ export default function Relances() {
                     <div className="text-xs text-ink-4">échéance {fmtDate(t.due_date)}</div>
                   </td>
                   <td className="hidden px-4 py-2.5 md:table-cell">
-                    <div className="text-ink-2">{t.client}</div>
+                    <div className="flex items-center gap-2 text-ink-2">
+                      <span>{t.client}</span>
+                      {t.actionnable && actionnables.filter((i) => i.client_id === t.client_id).length > 1 && (
+                        <button
+                          onClick={() => toggleClient(t.client_id)}
+                          className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-ink-3 transition hover:bg-hover"
+                          title="Sélectionner tout ce client"
+                        >
+                          {actionnables.filter((i) => i.client_id === t.client_id).every((i) => selected.has(i.id)) ? "désélectionner" : "tout"}
+                        </button>
+                      )}
+                    </div>
                     <div className="truncate text-xs text-ink-4">{t.email || "aucun e-mail"}</div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5">
-                    <Badge className="border-danger-line bg-danger-soft text-danger">{t.retard_jours} j</Badge>
+                    {t.en_retard ? (
+                      <Badge className="border-danger-line bg-danger-soft text-danger">
+                        {Math.max(t.retard_jours, 0)} j en retard
+                      </Badge>
+                    ) : (
+                      <Badge className="border-brand-line bg-brand-soft text-brand-2">
+                        échéance dans {Math.max(-t.retard_jours, 0)} j
+                      </Badge>
+                    )}
                     {t.relances_envoyees > 0 && (
                       <div className="mt-0.5 text-xs text-ink-4">{t.relances_envoyees} relance(s)</div>
                     )}
@@ -174,6 +295,7 @@ export default function Relances() {
             </tbody>
           </table>
         </Card>
+        </>
       )}
 
       {log.length > 0 && (
@@ -294,6 +416,36 @@ export default function Relances() {
             setSending(null);
           }
         }}
+      />
+
+      <ConfirmModal
+        open={batchConfirm}
+        title="Envoyer la sélection de relances ?"
+        busyLabel="Envoi en cours…"
+        confirmLabel="Oui, tout envoyer"
+        body={
+          <>
+            <p>
+              <strong>{selectedItems.length}</strong> facture(s) vont être relancée(s), reste dû total{" "}
+              <strong>{eur(selectedTotal)}</strong>.
+            </p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-ink-3">
+              {selectedItems.slice(0, 8).map((i) => (
+                <li key={i.id}>
+                  {i.number} — {i.client} ({templates.find((t) => t.level === i.niveau_suivant)?.label || "—"})
+                </li>
+              ))}
+              {selectedItems.length > 8 && <li>… et {selectedItems.length - 8} autre(s)</li>}
+            </ul>
+            <p className="mt-2 text-ink-3">
+              Destinataire :{" "}
+              <strong>{mode === "test" ? "votre adresse de test (mode test actif)" : "les adresses e-mail des clients"}</strong>.
+              Chaque facture reçoit le palier de relance qui correspond à son retard.
+            </p>
+          </>
+        }
+        onCancel={() => setBatchConfirm(false)}
+        onConfirm={confirmBatch}
       />
     </>
   );

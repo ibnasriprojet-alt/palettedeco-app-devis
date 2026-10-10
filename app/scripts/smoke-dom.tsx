@@ -112,7 +112,7 @@ const fixtures: Record<string, unknown> = {
   "/api/reminders/due": {
     items: [{ id: 5, number: "FACT-2026-005", status: "unpaid", issue_date: "2026-07-20",
       due_date: "2026-08-30", total_ttc: 4150, paid: 0, reste: 4150, retard_jours: 37,
-      relances_envoyees: 1, client_id: 3, client: "SCI Omega", email: "contact@omega.fr",
+      en_retard: true, relances_envoyees: 1, client_id: 3, client: "SCI Omega", email: "contact@omega.fr",
       niveau_atteint: 1, niveau_suivant: 2, libelle_suivant: "Relance ferme (J+15)", actionnable: true }],
     templates: [
       { id: 1, level: 1, label: "Rappel aimable (J+7)", subject: "Rappel", body: "Bonjour {client}", delay_days: 7, tone: "rappel", active: true, is_default: true },
@@ -244,9 +244,9 @@ ok("bandeau mode test", has("Mode test actif"));
 ok("facture en retard listee", has("FACT-2026-005"));
 ok("client affiche", has("SCI Omega"));
 ok("reste du affiche", has("4 150,00"));
-ok("retard en jours", has("37 j"));
+ok("retard en jours", has("37 j en retard"));
 ok("prochaine etape = relance ferme", has("Relance ferme (J+15)"));
-ok("montant en souffrance", has("Montant en souffrance"));
+ok("montant a recouvrer", has("Montant à recouvrer"));
 ok("relance historisee", has("redirige test") || has("redirigé test"));
 ok("aucun NaN", !has("NaN"));
 

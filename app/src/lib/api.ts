@@ -140,6 +140,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ invoice_id, level, channel }),
     }),
+  sendRemindersBatch: (invoice_ids: number[]) =>
+    request<{ ok: boolean; sent: number; failed: number; results: { ok: boolean; invoice_id: number; error?: string }[] }>(
+      "/api/reminders/send-batch",
+      { method: "POST", body: JSON.stringify({ invoice_ids }) },
+    ),
   getReminderLog: (invoice_id?: number) =>
     request<{ items: ReminderLog[] }>(`/api/reminders${invoice_id ? `?invoice_id=${invoice_id}` : ""}`),
 

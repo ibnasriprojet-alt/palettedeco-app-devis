@@ -117,6 +117,7 @@ export type ReminderTarget = {
   paid: number | string;
   reste: number | string;
   retard_jours: number;
+  en_retard: boolean;
   relances_envoyees: number;
   client_id: number | null;
   client: string;

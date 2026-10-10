@@ -59,9 +59,14 @@ const createdQuoteIds: number[] = [];
 const createdClientIds: number[] = [];
 
 console.log("\n=== 1. Reglages et mode e-mail ===");
+/* Le mode en base depend de l'utilisateur (il peut passer en mode Reel dans
+   l'ecran Reglages) : on separe la garantie de DEFAUT en code (toujours
+   "test") et la validite du mode lu en base. */
+const { DEFAULT_SETTINGS } = await import(ROOT + "/src/settings.ts");
 const set0 = await call("GET", "/api/settings");
 check("GET /api/settings répond 200", set0.status === 200, `recu ${set0.status}`);
-check("mode par defaut = test", set0.json?.email_mode === "test", `recu ${set0.json?.email_mode}`);
+check("defaut en code du mode e-mail = test", DEFAULT_SETTINGS.email_mode === "test", `recu ${DEFAULT_SETTINGS.email_mode}`);
+check("mode e-mail lu en base valide", ["test", "live"].includes(set0.json?.email_mode), `recu ${set0.json?.email_mode}`);
 check("regle d'echeance = fin de mois 30 j", set0.json?.due_rule === "end_of_month_30", `recu ${set0.json?.due_rule}`);
 
 const liveNoCode = await call("PUT", "/api/settings", { email_mode: "live" });
@@ -176,7 +181,12 @@ check("la mise en demeure cite l'article 1231-6", /1231-6/.test(mdr?.body || "")
 
 const due = await call("GET", "/api/reminders/due");
 check("GET /api/reminders/due repond 200", due.status === 200, `recu ${due.status}`);
-check("mode transmis a l'interface", due.json?.mode === "test", `recu ${due.json?.mode}`);
+check("mode transmis a l'interface", ["test", "live"].includes(due.json?.mode), `recu ${due.json?.mode}`);
+
+/* Envoi groupe : sans facture selectionnee, rien n'est envoye (test sans
+   effet de bord : aucune relance n'est envoyee en mode reel). */
+const batchEmpty = await call("POST", "/api/reminders/send-batch", { invoice_ids: [] });
+check("send-batch refuse la selection vide", batchEmpty.status === 400, `recu ${batchEmpty.status}`);
 
 console.log("\n=== 7. Factur-X (facture de test creee puis supprimee) ===");
 /* La base de dev n'a pas de facture : on cree un client, un devis, on le

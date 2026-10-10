@@ -1835,11 +1835,25 @@ async function sendMail(args: {
     throw new Error("EMAIL_NOT_CONFIGURED : ajoutez BREVO_API_KEY ou RESEND_API_KEY.");
   }
   if (BREVO_API_KEY) {
+    /* EMAIL_FROM vaut "Nom <adresse>" : Brevo exige sender.email, pas le nom
+       seul. Sans cette extraction, toute relance echouait avec "One of sender
+       email or sender ID is mandatory". */
+    const m = EMAIL_FROM.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+    const safeFrom = m
+      ? { name: m[1] || "PaletteD&co", email: m[2] }
+      : { name: "PaletteD&co", email: EMAIL_FROM };
+    let sender = { name: safeFrom.name, email: safeFrom.email };
+    try {
+      const validated = (await brevoValidatedSender(safeFrom.email)) || safeFrom.email;
+      sender = { name: safeFrom.name, email: validated };
+    } catch {
+      /* en dernier recours on garde l'adresse configuree */
+    }
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
-        sender: { name: EMAIL_FROM },
+        sender,
         to: [{ email: args.to }],
         subject: args.subject,
         textContent: args.text,

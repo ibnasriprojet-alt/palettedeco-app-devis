@@ -464,34 +464,43 @@ export function registerCockpit(deps: Deps) {
     return c.json(rows[0]);
   });
 
-  /* Factures dont le retard depasse le palier suivant : cible du centre de relances. */
+  /* Factures impayees a relancer : echues (retard) ET non echues (relance
+     anticipee possible). Cible du centre de relances. */
   app.get("/api/reminders/due", async (c) => {
     const templates = await loadTemplates(pool);
     const { rows } = await pool.query(
       `SELECT i.id, i.number, i.status, i.issue_date, i.due_date, i.total_ttc,
               coalesce((SELECT sum(p.amount) FROM payments p WHERE p.invoice_id = i.id), 0) AS paid,
               (CURRENT_DATE - i.due_date)::int AS retard_jours,
+              (i.due_date < CURRENT_DATE) AS en_retard,
               coalesce(i.remainder_sent_count, 0) AS relances_envoyees,
               i.client_id, coalesce(cl.name,'Client supprime') AS client, cl.email,
               (SELECT max(r.level) FROM reminders r WHERE r.invoice_id = i.id AND r.status = 'sent') AS niveau_atteint
          FROM invoices i
          LEFT JOIN clients cl ON cl.id = i.client_id
-        WHERE i.status IN ('unpaid','partial') AND i.due_date < CURRENT_DATE
-        ORDER BY i.due_date ASC`,
+        WHERE i.status IN ('unpaid','partial')
+        ORDER BY (i.due_date < CURRENT_DATE) DESC, i.due_date ASC`,
     );
-    const items = rows.map((r) => {
-      const reste = Number(r.total_ttc) - Number(r.paid);
-      const niveauAtteint = Number(r.niveau_atteint || 0);
-      const atteint = templates.filter((t) => Number(r.retard_jours) >= t.delay_days);
-      const suivant = atteint.find((t) => t.level > niveauAtteint) || null;
-      return {
-        ...r,
-        reste,
-        niveau_suivant: suivant ? suivant.level : null,
-        libelle_suivant: suivant ? suivant.label : null,
-        actionnable: !!suivant && reste > 0,
-      };
-    });
+    const items = rows
+      .map((r) => {
+        const reste = Number(r.total_ttc) - Number(r.paid);
+        const niveauAtteint = Number(r.niveau_atteint || 0);
+        const atteint = templates.filter((t) => Number(r.retard_jours) >= t.delay_days);
+        /* Palier du retard, sinon premier palier non encore envoye : permet de
+           relancer une facture non echue (relance anticipee, niveau 1). */
+        const suivant = atteint.find((t) => t.level > niveauAtteint)
+          || templates.find((t) => t.level > niveauAtteint)
+          || null;
+        return {
+          ...r,
+          reste,
+          en_retard: !!r.en_retard,
+          niveau_suivant: suivant ? suivant.level : null,
+          libelle_suivant: suivant ? suivant.label : null,
+          actionnable: !!suivant && reste > 0,
+        };
+      })
+      .filter((r) => r.reste > 0);
     return c.json({ items, templates, mode: (await loadAppSettings(pool)).email_mode });
   });
 
@@ -526,14 +535,16 @@ export function registerCockpit(deps: Deps) {
     });
   });
 
-  app.post("/api/reminders/send", async (c) => {
-    const b = await c.req.json();
-    const invoiceId = Number(b.invoice_id);
-    const level = num(b.level, 1);
+  /* Envoi d'une relance pour une facture : logique partagee entre l'envoi
+     unitaire et l'envoi par selection. Ne leve pas : renvoie un resultat que
+     l'appelant agrege (utile pour un envoi groupe ou l'echec d'une facture ne
+     doit pas interrompre les suivantes). */
+  async function deliverReminder(invoiceId: number, level: number, channel?: string) {
+    if (!Number.isFinite(invoiceId) || invoiceId <= 0) return { ok: false as const, status: 400, error: "Facture invalide" };
     const settings = await loadAppSettings(pool);
     const templates = await loadTemplates(pool);
     const tpl = templates.find((t) => t.level === level);
-    if (!tpl) return c.json({ error: "Modèle de relance introuvable" }, 404);
+    if (!tpl) return { ok: false as const, status: 404, error: "Modèle de relance introuvable" };
 
     const { rows } = await pool.query(
       `SELECT i.*, cl.name AS client, cl.email,
@@ -541,15 +552,15 @@ export function registerCockpit(deps: Deps) {
          FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.id = $1`,
       [invoiceId],
     );
-    if (!rows.length) return c.json({ error: "Facture introuvable" }, 404);
+    if (!rows.length) return { ok: false as const, status: 404, error: "Facture introuvable" };
     const invoice = rows[0];
-    if (!invoice.email) return c.json({ error: "Cette facture n'a pas d'adresse e-mail client." }, 400);
+    if (!invoice.email) return { ok: false as const, status: 400, error: "Cette facture n'a pas d'adresse e-mail client." };
 
     const company = await deps.loadCompany();
     const rendered = renderReminder(tpl, invoice, company, settings);
     const target = resolveRecipient(settings, invoice.email);
     if (!target.to) {
-      return c.json({ error: "Mode test actif mais aucune adresse de test renseignée : rien n'a été envoyé." }, 400);
+      return { ok: false as const, status: 400, error: "Mode test actif mais aucune adresse de test renseignée : rien n'a été envoyé." };
     }
     const reste = Number(invoice.total_ttc) - Number(invoice.paid);
 
@@ -557,18 +568,16 @@ export function registerCockpit(deps: Deps) {
       `INSERT INTO reminders (invoice_id, template_id, level, channel, to_email, subject, body, status,
                               redirected_to_test)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'queued',$8) RETURNING *`,
-      [invoiceId, tpl.id, level, b.channel === "courrier" ? "courrier" : "email",
+      [invoiceId, tpl.id, level, channel === "courrier" ? "courrier" : "email",
        target.to, rendered.subject, rendered.body, target.redirected],
     );
 
     try {
-      if (target.to) {
-        await deps.sendMail({
-          to: target.to,
-          subject: target.redirected ? `[TEST] ${rendered.subject}` : rendered.subject,
-          text: rendered.body,
-        });
-      }
+      await deps.sendMail({
+        to: target.to,
+        subject: target.redirected ? `[TEST] ${rendered.subject}` : rendered.subject,
+        text: rendered.body,
+      });
       await pool.query(
         `UPDATE reminders SET status='sent', sent_at=now() WHERE id=$1`,
         [rec.rows[0].id],
@@ -577,21 +586,60 @@ export function registerCockpit(deps: Deps) {
       if (!target.redirected) {
         await pool.query("UPDATE invoices SET remainder_sent_count = coalesce(remainder_sent_count,0) + 1 WHERE id = $1", [invoiceId]);
       }
-      return c.json({
-        ok: true,
-        id: rec.rows[0].id,
-        redirected: target.redirected,
-        mode: target.mode,
-        to: target.to,
-        reste,
-      });
+      return {
+        ok: true as const, status: 200, invoice_id: invoiceId, number: invoice.number,
+        id: rec.rows[0].id, redirected: target.redirected, mode: target.mode, to: target.to, reste,
+      };
     } catch (e) {
       await pool.query("UPDATE reminders SET status='failed', error = $2 WHERE id = $1", [
         rec.rows[0].id,
         String((e as Error).message).slice(0, 300),
       ]);
-      return c.json({ error: "Envoi impossible", detail: (e as Error).message }, 502);
+      return { ok: false as const, status: 502, error: "Envoi impossible", detail: (e as Error).message };
     }
+  }
+
+  app.post("/api/reminders/send", async (c) => {
+    const b = await c.req.json();
+    const r = await deliverReminder(Number(b.invoice_id), num(b.level, 1), b.channel);
+    if (!r.ok) return c.json({ error: r.error, detail: (r as { detail?: string }).detail, invoice_id: (r as { invoice_id?: number }).invoice_id }, r.status as any);
+    return c.json(r);
+  });
+
+  /* Envoi groupe : relance d'une selection de factures en une fois. Le niveau
+     est recalcule cote serveur (meme regle que le centre de relances) : le
+     client n'impose pas le palier, il choisit seulement les factures. */
+  app.post("/api/reminders/send-batch", async (c) => {
+    const b = await c.req.json();
+    const ids: number[] = Array.isArray(b.invoice_ids)
+      ? b.invoice_ids.map(Number).filter((n: number) => Number.isFinite(n) && n > 0)
+      : [];
+    if (!ids.length) return c.json({ error: "Aucune facture sélectionnée." }, 400);
+    const templates = await loadTemplates(pool);
+    const { rows } = await pool.query(
+      `SELECT i.id, (CURRENT_DATE - i.due_date)::int AS retard_jours,
+              (SELECT max(r.level) FROM reminders r WHERE r.invoice_id = i.id AND r.status = 'sent') AS niveau_atteint
+         FROM invoices i WHERE i.id = ANY($1::int[])`,
+      [ids],
+    );
+    const plan = new Map<number, number>();
+    for (const r of rows) {
+      const niveauAtteint = Number(r.niveau_atteint || 0);
+      const suivant = templates.filter((t) => Number(r.retard_jours) >= t.delay_days).find((t) => t.level > niveauAtteint)
+        || templates.find((t) => t.level > niveauAtteint);
+      if (suivant) plan.set(Number(r.id), suivant.level);
+    }
+    const results: Awaited<ReturnType<typeof deliverReminder>>[] = [];
+    for (const id of ids) {
+      const level = plan.get(id);
+      if (!level) {
+        results.push({ ok: false as const, status: 400, invoice_id: id, error: "Aucun palier de relance à envoyer." });
+        continue;
+      }
+      results.push(await deliverReminder(id, level, b.channel));
+    }
+    const sent = results.filter((r) => r.ok).length;
+    return c.json({ ok: results.every((r) => r.ok), sent, failed: results.length - sent, results });
   });
 
   app.get("/api/reminders", async (c) => {
