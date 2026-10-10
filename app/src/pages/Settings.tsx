@@ -225,8 +225,14 @@ export default function Settings() {
                 <Field label="TVA par défaut (%)">
                   <input type="number" min="0" max="100" step="0.1" className={inputCls} value={company.default_tva_rate} onChange={(e) => set("default_tva_rate", e.target.value)} />
                 </Field>
-                <Field label="Conditions de règlement">
-                  <input className={inputCls} value={company.payment_terms} onChange={(e) => set("payment_terms", e.target.value)} placeholder="Paiement à réception..." />
+                <Field label="Conditions de règlement" className="sm:col-span-2">
+                  <textarea
+                    rows={3}
+                    className={inputCls}
+                    value={company.payment_terms}
+                    onChange={(e) => set("payment_terms", e.target.value)}
+                    placeholder={"Paiement accepté :\n- Virement\n- CB\n- Espèces"}
+                  />
                 </Field>
                 <Field label="Mentions obligatoires" className="sm:col-span-2">
                   <textarea rows={3} className={inputCls} value={company.mentions} onChange={(e) => set("mentions", e.target.value)} placeholder="Mentions légales, pénalités de retard (ex : pénalités de 3 fois le taux d'intérêt légal...), escompte..." />

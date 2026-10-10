@@ -505,10 +505,19 @@ async function buildDocumentPdf(type, id) {
       pdf.text(moneyStr(doc.remaining), right - 140, ry, { width: 140, align: "right" });
     }
 
-    /* Conditions / notes / mentions */
+    /* Règlement (IBAN) : affiché avant les conditions de règlement. */
+    if (company.iban) {
+      pdf.y += 22;
+      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(gray).text("RÈGLEMENT", M, pdf.y);
+      pdf.y += 10;
+      pdf.font("Helvetica").fontSize(8.5).fillColor(ink);
+      pdf.text(`IBAN : ${company.iban}${company.bic ? `  ·  BIC : ${company.bic}` : ""}`, M, pdf.y);
+    }
+
+    /* Conditions / notes / mentions : en dessous du règlement */
     if (doc.conditions || doc.notes || company.mentions) {
       pdf.y += 24;
-      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(gray).text("CONDITIONS", M, pdf.y);
+      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(gray).text("CONDITIONS DE RÈGLEMENT", M, pdf.y);
       pdf.y += 10;
       pdf.font("Helvetica").fontSize(8).fillColor(gray);
       if (doc.conditions) {
@@ -517,15 +526,6 @@ async function buildDocumentPdf(type, id) {
       }
       if (doc.notes) pdf.text(doc.notes, M, pdf.y, { width: pageW - 2 * M });
       if (company.mentions) pdf.text(company.mentions, M, pdf.y, { width: pageW - 2 * M });
-    }
-
-    /* IBAN */
-    if (company.iban) {
-      pdf.y += 22;
-      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(gray).text("RÈGLEMENT", M, pdf.y);
-      pdf.y += 10;
-      pdf.font("Helvetica").fontSize(8.5).fillColor(ink);
-      pdf.text(`IBAN : ${company.iban}${company.bic ? `  ·  BIC : ${company.bic}` : ""}`, M, pdf.y);
     }
 
         /* Factur-X : XML de facture rattache au PDF des factures. */

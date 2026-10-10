@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS company (
   bic TEXT DEFAULT '',
   logo TEXT DEFAULT '',
   default_tva_rate NUMERIC(5,2) NOT NULL DEFAULT 20,
-  payment_terms TEXT DEFAULT '',
+  payment_terms TEXT DEFAULT E'Paiement accepté :\n- Virement\n- CB\n- Espèces',
   mentions TEXT DEFAULT '',
   app_password TEXT DEFAULT '',
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

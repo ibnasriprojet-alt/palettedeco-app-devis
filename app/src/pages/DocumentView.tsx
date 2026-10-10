@@ -435,7 +435,15 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                 </div>
               </div>
 
-              {/* Conditions */}
+              {/* Règlement */}
+              {company.iban && (
+                <div className="mt-6 border-t border-line-2 pt-3 text-xs text-ink-4 print-break-avoid">
+                  <div className="font-semibold uppercase tracking-wide text-ink-3">Règlement</div>
+                  <div className="mt-1">IBAN : {company.iban}{company.bic ? ` · BIC : ${company.bic}` : ""}</div>
+                </div>
+              )}
+
+              {/* Conditions : en dessous du règlement */}
               <div className="mt-6 space-y-4 print-break-avoid">
                 {doc.conditions && (
                   <div>
@@ -453,14 +461,6 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   <div className="whitespace-pre-line text-[10px] leading-relaxed text-ink-3">{company.mentions}</div>
                 )}
               </div>
-
-              {/* IBAN */}
-              {company.iban && (
-                <div className="mt-6 border-t border-line-2 pt-3 text-xs text-ink-4 print-break-avoid">
-                  <div className="font-semibold uppercase tracking-wide text-ink-3">Règlement</div>
-                  <div className="mt-1">IBAN : {company.iban}{company.bic ? ` · BIC : ${company.bic}` : ""}</div>
-                </div>
-              )}
             </div>
           </div>
 
