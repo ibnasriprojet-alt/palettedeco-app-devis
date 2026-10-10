@@ -96,6 +96,11 @@ export default function Clients() {
             <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface p-4">
               <div className="min-w-0">
                 <div className="font-semibold text-ink">{c.name}</div>
+                {c.no_reminders && (
+                  <span className="mt-0.5 inline-block rounded-full border border-danger-line bg-danger-soft px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-danger">
+                    relances coupées
+                  </span>
+                )}
                 <div className="truncate text-sm text-ink-3">
                   {[c.email, c.phone, c.address].filter(Boolean).join(" · ") || "Aucune coordonnée"}
                 </div>

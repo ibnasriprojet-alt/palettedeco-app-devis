@@ -42,6 +42,7 @@ export interface Client {
   email: string;
   phone: string;
   notes: string;
+  no_reminders?: boolean;
   created_at?: string;
 }
 

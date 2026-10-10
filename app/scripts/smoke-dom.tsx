@@ -113,7 +113,18 @@ const fixtures: Record<string, unknown> = {
     items: [{ id: 5, number: "FACT-2026-005", status: "unpaid", issue_date: "2026-07-20",
       due_date: "2026-08-30", total_ttc: 4150, paid: 0, reste: 4150, retard_jours: 37,
       en_retard: true, relances_envoyees: 1, client_id: 3, client: "SCI Omega", email: "contact@omega.fr",
-      niveau_atteint: 1, niveau_suivant: 2, libelle_suivant: "Relance ferme (J+15)", actionnable: true }],
+      niveau_atteint: 1, niveau_suivant: 2, libelle_suivant: "Relance ferme (J+15)", actionnable: true,
+      relance_pausee: false, client_sans_relance: false },
+      { id: 6, number: "FACT-2026-006", status: "unpaid", issue_date: "2026-08-10",
+      due_date: "2026-09-10", total_ttc: 900, paid: 0, reste: 900, retard_jours: 22,
+      en_retard: true, relances_envoyees: 0, client_id: 4, client: "Client En Pause", email: "pause@client.fr",
+      niveau_atteint: 0, niveau_suivant: 1, libelle_suivant: "Rappel aimable (J+7)", actionnable: false,
+      relance_pausee: true, client_sans_relance: false },
+      { id: 7, number: "FACT-2026-007", status: "unpaid", issue_date: "2026-08-15",
+      due_date: "2026-09-15", total_ttc: 1200, paid: 0, reste: 1200, retard_jours: 18,
+      en_retard: true, relances_envoyees: 0, client_id: 5, client: "Client Exclu", email: "exclu@client.fr",
+      niveau_atteint: 0, niveau_suivant: 1, libelle_suivant: "Rappel aimable (J+7)", actionnable: false,
+      relance_pausee: false, client_sans_relance: true }],
     templates: [
       { id: 1, level: 1, label: "Rappel aimable (J+7)", subject: "Rappel", body: "Bonjour {client}", delay_days: 7, tone: "rappel", active: true, is_default: true },
       { id: 2, level: 2, label: "Relance ferme (J+15)", subject: "Relance", body: "Bonjour {client}", delay_days: 15, tone: "rappel", active: true, is_default: true },
@@ -248,6 +259,10 @@ ok("retard en jours", has("37 j en retard"));
 ok("prochaine etape = relance ferme", has("Relance ferme (J+15)"));
 ok("montant a recouvrer", has("Montant à recouvrer"));
 ok("relance historisee", has("redirige test") || has("redirigé test"));
+ok("facture en pause listee", has("FACT-2026-006") && has("relance en pause"));
+ok("facture en pause non actionnable", has("Reprendre"));
+ok("client exclu des relances", has("FACT-2026-007") && has("relances coupées"));
+ok("option plus de relance proposee", has("plus de relance"));
 ok("aucun NaN", !has("NaN"));
 
 console.log("\n=== Bandeau KPI ===");

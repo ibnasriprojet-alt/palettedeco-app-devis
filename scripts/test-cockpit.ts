@@ -188,6 +188,68 @@ check("mode transmis a l'interface", ["test", "live"].includes(due.json?.mode), 
 const batchEmpty = await call("POST", "/api/reminders/send-batch", { invoice_ids: [] });
 check("send-batch refuse la selection vide", batchEmpty.status === 400, `recu ${batchEmpty.status}`);
 
+console.log("\n=== 5bis. Mise en pause et exclusion des relances ===");
+/* Facture de test (client avec e-mail) pour verifier les deux verrous :
+   pause d'une facture et exclusion d'un client. Aucun e-mail ne part :
+   les envois testes sont refuses par les gardes, jamais aboutis. */
+const rpClient = await call("POST", "/api/clients", { name: "Client Pause Test", email: "pause@test.fr" });
+if (rpClient.json?.id > 0) createdClientIds.push(rpClient.json.id);
+const rpQuote = await call("POST", "/api/quotes", {
+  client_id: rpClient.json?.id, status: "accepted",
+  items: [{ description: "Prestation pause", quantity: 1, unit_price: 200, tva_rate: 20 }],
+});
+if (rpQuote.json?.id > 0) createdQuoteIds.push(rpQuote.json.id);
+const rpConv = await call("POST", `/api/quotes/${rpQuote.json?.id}/convert`, {});
+const rpInv = rpConv.json;
+if (rpInv?.id > 0) createdInvoiceIds.push(rpInv.id);
+check("facture de test creee pour les relances", isCreated(rpConv), `recu ${rpConv.status}`);
+
+const dueItem = async () =>
+  (await call("GET", "/api/reminders/due")).json?.items?.find((i: any) => i.id === rpInv?.id);
+
+let it0 = await dueItem();
+check("facture presente dans les relances", !!it0 && it0.actionnable === true, JSON.stringify(it0));
+
+/* 1) Pause de la facture. */
+const pauseOn = await call("POST", "/api/reminders/invoice-pause", { invoice_id: rpInv?.id, paused: true });
+check("mise en pause acceptee", pauseOn.status === 200 && pauseOn.json?.paused === true, `recu ${pauseOn.status}`);
+it0 = await dueItem();
+check("facture marquee en pause", it0?.relance_pausee === true, JSON.stringify(it0));
+check("facture en pause non actionnable", it0?.actionnable === false, JSON.stringify(it0));
+const sendPaused = await call("POST", "/api/reminders/send", { invoice_id: rpInv?.id, level: 1 });
+check("envoi refuse pour une facture en pause", sendPaused.status === 400, `recu ${sendPaused.status} ${JSON.stringify(sendPaused.json)}`);
+const batchPaused = await call("POST", "/api/reminders/send-batch", { invoice_ids: [rpInv?.id] });
+check("envoi groupe refuse la facture en pause", batchPaused.json?.sent === 0 && batchPaused.json?.failed === 1, JSON.stringify(batchPaused.json));
+
+/* 2) Reprise de la facture. */
+const pauseOff = await call("POST", "/api/reminders/invoice-pause", { invoice_id: rpInv?.id, paused: false });
+check("reprise acceptee", pauseOff.status === 200 && pauseOff.json?.paused === false, `recu ${pauseOff.status}`);
+it0 = await dueItem();
+check("facture a nouveau actionnable", it0?.actionnable === true && it0?.relance_pausee === false, JSON.stringify(it0));
+
+/* 3) Exclusion du client (plus jamais de relance). */
+const clPauseOn = await call("POST", "/api/reminders/client-pause", { client_id: rpClient.json?.id, paused: true });
+check("exclusion client acceptee", clPauseOn.status === 200 && clPauseOn.json?.paused === true, `recu ${clPauseOn.status}`);
+it0 = await dueItem();
+check("facture marquee client exclu", it0?.client_sans_relance === true, JSON.stringify(it0));
+check("facture d'un client exclu non actionnable", it0?.actionnable === false, JSON.stringify(it0));
+const sendExcluded = await call("POST", "/api/reminders/send", { invoice_id: rpInv?.id, level: 1 });
+check("envoi refuse pour un client exclu", sendExcluded.status === 400, `recu ${sendExcluded.status} ${JSON.stringify(sendExcluded.json)}`);
+const clList = await call("GET", "/api/clients");
+check("client marque no_reminders en base", (clList.json || []).some((cl: any) => cl.id === rpClient.json?.id && cl.no_reminders === true), "no_reminders absent");
+
+/* 4) Reactivation. */
+const clPauseOff = await call("POST", "/api/reminders/client-pause", { client_id: rpClient.json?.id, paused: false });
+check("reactivation client acceptee", clPauseOff.status === 200 && clPauseOff.json?.paused === false, `recu ${clPauseOff.status}`);
+it0 = await dueItem();
+check("facture a nouveau actionnable apres reactivation", it0?.actionnable === true && it0?.client_sans_relance === false, JSON.stringify(it0));
+
+/* 5) Validations d'entree. */
+check("pause : facture invalide refusee", (await call("POST", "/api/reminders/invoice-pause", { invoice_id: 0, paused: true })).status === 400);
+check("pause : facture inexistante -> 404", (await call("POST", "/api/reminders/invoice-pause", { invoice_id: 99999999, paused: true })).status === 404);
+check("exclusion : client invalide refuse", (await call("POST", "/api/reminders/client-pause", { client_id: 0, paused: true })).status === 400);
+check("exclusion : client inexistant -> 404", (await call("POST", "/api/reminders/client-pause", { client_id: 99999999, paused: true })).status === 404);
+
 console.log("\n=== 7. Factur-X (facture de test creee puis supprimee) ===");
 /* La base de dev n'a pas de facture : on cree un client, un devis, on le
    convertit, puis on supprime tout. Les factures existantes sont intactes. */

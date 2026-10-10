@@ -474,6 +474,7 @@ export function registerCockpit(deps: Deps) {
               (CURRENT_DATE - i.due_date)::int AS retard_jours,
               (i.due_date < CURRENT_DATE) AS en_retard,
               coalesce(i.remainder_sent_count, 0) AS relances_envoyees,
+              i.reminder_paused, cl.no_reminders,
               i.client_id, coalesce(cl.name,'Client supprime') AS client, cl.email,
               (SELECT max(r.level) FROM reminders r WHERE r.invoice_id = i.id AND r.status = 'sent') AS niveau_atteint
          FROM invoices i
@@ -491,13 +492,18 @@ export function registerCockpit(deps: Deps) {
         const suivant = atteint.find((t) => t.level > niveauAtteint)
           || templates.find((t) => t.level > niveauAtteint)
           || null;
+        const relancePausee = !!r.reminder_paused;
+        const clientSansRelance = !!r.no_reminders;
         return {
           ...r,
           reste,
           en_retard: !!r.en_retard,
+          relance_pausee: relancePausee,
+          client_sans_relance: clientSansRelance,
           niveau_suivant: suivant ? suivant.level : null,
           libelle_suivant: suivant ? suivant.label : null,
-          actionnable: !!suivant && reste > 0,
+          /* Suspendue (facture) ou excludu du client : plus rien envoyer. */
+          actionnable: !!suivant && reste > 0 && !relancePausee && !clientSansRelance,
         };
       })
       .filter((r) => r.reste > 0);
@@ -547,13 +553,15 @@ export function registerCockpit(deps: Deps) {
     if (!tpl) return { ok: false as const, status: 404, invoice_id: invoiceId, error: "Modèle de relance introuvable" };
 
     const { rows } = await pool.query(
-      `SELECT i.*, cl.name AS client, cl.email,
+      `SELECT i.*, cl.name AS client, cl.email, cl.no_reminders,
               coalesce((SELECT sum(p.amount) FROM payments p WHERE p.invoice_id = i.id),0) AS paid
          FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.id = $1`,
       [invoiceId],
     );
     if (!rows.length) return { ok: false as const, status: 404, invoice_id: invoiceId, error: "Facture introuvable" };
     const invoice = rows[0];
+    if (invoice.reminder_paused) return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Relance suspendue pour cette facture : reprenez-la depuis le centre de relances." };
+    if (invoice.no_reminders) return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Les relances sont désactivées pour ce client." };
     if (!invoice.email) return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Cette facture n'a pas d'adresse e-mail client." };
 
     const company = await deps.loadCompany();
@@ -604,6 +612,31 @@ export function registerCockpit(deps: Deps) {
     const r = await deliverReminder(Number(b.invoice_id), num(b.level, 1), b.channel);
     if (!r.ok) return c.json({ error: r.error, detail: (r as { detail?: string }).detail, invoice_id: (r as { invoice_id?: number }).invoice_id }, r.status as any);
     return c.json(r);
+  });
+
+  /* Suspendre/reprendre les relances d'une facture. */
+  app.post("/api/reminders/invoice-pause", async (c) => {
+    const b = await c.req.json();
+    const invoiceId = Number(b.invoice_id);
+    const paused = !!b.paused;
+    if (!Number.isFinite(invoiceId) || invoiceId <= 0) return c.json({ error: "Facture invalide" }, 400);
+    const { rowCount } = await pool.query("UPDATE invoices SET reminder_paused = $1, updated_at = now() WHERE id = $2", [
+      paused,
+      invoiceId,
+    ]);
+    if (!rowCount) return c.json({ error: "Facture introuvable" }, 404);
+    return c.json({ ok: true, invoice_id: invoiceId, paused });
+  });
+
+  /* Desactiver/reactiver les relances pour tout un client. */
+  app.post("/api/reminders/client-pause", async (c) => {
+    const b = await c.req.json();
+    const clientId = Number(b.client_id);
+    const paused = !!b.paused;
+    if (!Number.isFinite(clientId) || clientId <= 0) return c.json({ error: "Client invalide" }, 400);
+    const { rowCount } = await pool.query("UPDATE clients SET no_reminders = $1 WHERE id = $2", [paused, clientId]);
+    if (!rowCount) return c.json({ error: "Client introuvable" }, 404);
+    return c.json({ ok: true, client_id: clientId, paused });
   });
 
   /* Envoi groupe : relance d'une selection de factures en une fois. Le niveau

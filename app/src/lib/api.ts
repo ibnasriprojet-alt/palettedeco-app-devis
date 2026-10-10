@@ -147,6 +147,16 @@ export const api = {
     ),
   getReminderLog: (invoice_id?: number) =>
     request<{ items: ReminderLog[] }>(`/api/reminders${invoice_id ? `?invoice_id=${invoice_id}` : ""}`),
+  setInvoiceReminderPaused: (invoice_id: number, paused: boolean) =>
+    request<{ ok: boolean; invoice_id: number; paused: boolean }>("/api/reminders/invoice-pause", {
+      method: "POST",
+      body: JSON.stringify({ invoice_id, paused }),
+    }),
+  setClientNoReminders: (client_id: number, paused: boolean) =>
+    request<{ ok: boolean; client_id: number; paused: boolean }>("/api/reminders/client-pause", {
+      method: "POST",
+      body: JSON.stringify({ client_id, paused }),
+    }),
 
   getInvoiceCompliance: (id: number) =>
     request<{ invoice: Record<string, unknown>; checks: ComplianceCheck[]; ready: boolean }>(`/api/invoices/${id}/compliance`),

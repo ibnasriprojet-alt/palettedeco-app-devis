@@ -125,6 +125,8 @@ export type ReminderTarget = {
   niveau_atteint: number | null;
   niveau_suivant: number | null;
   libelle_suivant: string | null;
+  relance_pausee?: boolean;
+  client_sans_relance?: boolean;
   actionnable: boolean;
 };
 

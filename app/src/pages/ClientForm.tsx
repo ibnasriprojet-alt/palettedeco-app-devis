@@ -20,6 +20,7 @@ export default function ClientForm() {
     email: "",
     phone: "",
     notes: "",
+    no_reminders: false,
   });
 
   useEffect(() => {
@@ -28,13 +29,13 @@ export default function ClientForm() {
       .getClients()
       .then((list) => {
         const c = list.find((x) => x.id === editId);
-        if (c) setForm({ name: c.name, siret: c.siret, vat_number: c.vat_number || "", address: c.address, email: c.email, phone: c.phone, notes: c.notes });
+        if (c) setForm({ name: c.name, siret: c.siret, vat_number: c.vat_number || "", address: c.address, email: c.email, phone: c.phone, notes: c.notes, no_reminders: !!c.no_reminders });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [editId]);
 
-  function set<K extends keyof typeof form>(key: K, val: string) {
+  function set<K extends keyof typeof form>(key: K, val: string | boolean) {
     setForm((f) => ({ ...f, [key]: val }));
   }
 
@@ -89,6 +90,12 @@ export default function ClientForm() {
               <Field label="Notes" className="sm:col-span-2">
                 <textarea rows={2} className={inputCls} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Notes internes (remises, récurrence...)" />
               </Field>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <input id="no_reminders" type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={form.no_reminders} onChange={(e) => set("no_reminders", e.target.checked)} />
+                <label htmlFor="no_reminders" className="text-sm text-ink-3">
+                  Ne pas relancer ce client (enregistrer pour appliquer sur toutes ses factures impayées)
+                </label>
+              </div>
             </div>
             {error && <div className="mt-3 text-sm text-danger">{error}</div>}
             <div className="mt-4 flex gap-2">

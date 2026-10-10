@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertCircle, Eye, MailCheck, Send, Settings, ShieldAlert } from "lucide-react";
+import { AlertCircle, Ban, Eye, MailCheck, Pause, Play, Send, Settings, ShieldAlert } from "lucide-react";
 import { api } from "../lib/api";
 import type { ReminderPreview, ReminderTarget, ReminderTemplate } from "../lib/cockpit-types";
 import { eur } from "../lib/period";
@@ -56,6 +56,7 @@ export default function Relances() {
   const totalRetard = items.reduce((s, i) => s + Number(i.reste), 0);
   const actionnables = items.filter((i) => i.actionnable);
   const overdueCount = items.filter((i) => i.en_retard).length;
+  const pausedCount = items.filter((i) => i.relance_pausee).length;
 
   const selectedItems = actionnables.filter((i) => selected.has(i.id));
   const allSelected = actionnables.length > 0 && selectedItems.length === actionnables.length;
@@ -95,6 +96,27 @@ export default function Relances() {
     }
   };
 
+  const togglePause = async (t: ReminderTarget, paused: boolean) => {
+    setError("");
+    try {
+      await api.setInvoiceReminderPaused(t.id, paused);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const toggleClientPause = async (clientId: number | null, paused: boolean) => {
+    if (clientId == null) return;
+    setError("");
+    try {
+      await api.setClientNoReminders(clientId, paused);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -131,6 +153,7 @@ export default function Relances() {
           <div className="text-xs uppercase tracking-wide text-ink-4">Factures impayées</div>
           <div className="mt-1 text-2xl font-semibold">{items.length}</div>
           {overdueCount > 0 && <div className="mt-0.5 text-xs text-danger">{overdueCount} en retard</div>}
+          {pausedCount > 0 && <div className="mt-0.5 text-xs text-ink-3">{pausedCount} en pause</div>}
         </Card>
         <Card className="p-4">
           <div className="text-xs uppercase tracking-wide text-ink-4">Montant à recouvrer</div>
@@ -245,6 +268,19 @@ export default function Relances() {
                           {actionnables.filter((i) => i.client_id === t.client_id).every((i) => selected.has(i.id)) ? "désélectionner" : "tout"}
                         </button>
                       )}
+                      {t.client_sans_relance ? (
+                        <Badge className="border-danger-line bg-danger-soft text-danger">
+                          <Ban className="mr-1 inline h-3 w-3" /> relances coupées
+                        </Badge>
+                      ) : (
+                        <button
+                          onClick={() => toggleClientPause(t.client_id, true)}
+                          className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-ink-3 transition hover:bg-hover"
+                          title="Ne plus jamais relancer ce client"
+                        >
+                          <Ban className="mr-0.5 inline h-3 w-3" /> plus de relance
+                        </button>
+                      )}
                     </div>
                     <div className="truncate text-xs text-ink-4">{t.email || "aucun e-mail"}</div>
                   </td>
@@ -264,7 +300,13 @@ export default function Relances() {
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{eur(t.reste)}</td>
                   <td className="px-4 py-2.5">
-                    {t.libelle_suivant ? (
+                    {t.relance_pausee ? (
+                      <Badge className="border-brand-line bg-brand-soft text-brand-2">
+                        <Pause className="mr-1 inline h-3 w-3" /> relance en pause
+                      </Badge>
+                    ) : t.client_sans_relance ? (
+                      <span className="text-xs text-ink-3">client exclu</span>
+                    ) : t.libelle_suivant ? (
                       <span className="text-ink-3">{t.libelle_suivant}</span>
                     ) : (
                       <span className="text-ink-4">paliers épuisés</span>
@@ -285,9 +327,43 @@ export default function Relances() {
                         >
                           <Send className="h-3.5 w-3.5" /> Envoyer
                         </button>
+                        <button
+                          onClick={() => togglePause(t, true)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
+                          title="Mettre cette relance en pause"
+                        >
+                          <Pause className="h-3.5 w-3.5" /> Pause
+                        </button>
                       </div>
                     ) : (
-                      <span className="text-xs text-ink-4">—</span>
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          onClick={() => openPreview(t)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
+                          disabled={!t.niveau_suivant}
+                          title={t.niveau_suivant ? "Aperçu du prochain palier" : "Paliers épuisés"}
+                        >
+                          <Eye className="h-3.5 w-3.5" /> Aperçu
+                        </button>
+                        <button
+                          onClick={() => togglePause(t, false)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
+                          disabled={!t.relance_pausee}
+                          title="Reprendre les relances pour cette facture"
+                        >
+                          <Play className="h-3.5 w-3.5" /> Reprendre
+                        </button>
+                        {t.client_sans_relance && (
+                          <button
+                            onClick={() => toggleClientPause(t.client_id, false)}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
+                            title="Réactiver les relances pour ce client"
+                          >
+                            <Play className="h-3.5 w-3.5" /> Relancer ce client
+                          </button>
+                        )}
+                        <span className="text-xs text-ink-4">—</span>
+                      </div>
                     )}
                   </td>
                 </tr>

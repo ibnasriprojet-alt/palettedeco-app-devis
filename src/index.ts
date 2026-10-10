@@ -708,9 +708,9 @@ app.get("/api/clients", async (c) => {
 app.post("/api/clients", async (c) => {
   const b = await c.req.json();
   const { rows } = await pool.query(
-    `INSERT INTO clients (name, siret, vat_number, address, email, phone, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [b.name || "", b.siret || "", b.vat_number || "", b.address || "", b.email || "", b.phone || "", b.notes || ""],
+    `INSERT INTO clients (name, siret, vat_number, address, email, phone, notes, no_reminders)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [b.name || "", b.siret || "", b.vat_number || "", b.address || "", b.email || "", b.phone || "", b.notes || "", !!b.no_reminders],
   );
   return c.json(rows[0], 201);
 });
@@ -719,9 +719,9 @@ app.put("/api/clients/:id", async (c) => {
   const id = Number(c.req.param("id"));
   const b = await c.req.json();
   const { rows } = await pool.query(
-    `UPDATE clients SET name=$1, siret=$2, vat_number=$3, address=$4, email=$5, phone=$6, notes=$7
-     WHERE id=$8 RETURNING *`,
-    [b.name || "", b.siret || "", b.vat_number || "", b.address || "", b.email || "", b.phone || "", b.notes || "", id],
+    `UPDATE clients SET name=$1, siret=$2, vat_number=$3, address=$4, email=$5, phone=$6, notes=$7, no_reminders=$8
+     WHERE id=$9 RETURNING *`,
+    [b.name || "", b.siret || "", b.vat_number || "", b.address || "", b.email || "", b.phone || "", b.notes || "", !!b.no_reminders, id],
   );
   if (!rows[0]) return c.json({ error: "Client introuvable" }, 404);
   return c.json(rows[0]);
