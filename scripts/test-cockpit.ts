@@ -169,6 +169,43 @@ check(
   `recu ${blocked.status}`,
 );
 
+/* Modification et suppression d'un compte bancaire. */
+const acct2 = await call("POST", "/api/bank-accounts", {
+  name: "Compte secondaire",
+  bank_name: "Banque Test",
+  iban: "FR7612345678901234567890123",
+  is_default: false,
+});
+check("second compte cree", acct2.status === 201, `recu ${acct2.status}`);
+
+const acct2Edit = await call("PUT", `/api/bank-accounts/${acct2.json?.id}`, {
+  name: "Compte secondaire (renomme)",
+  iban: "FR7699999999999999999999999",
+});
+check("modification du compte acceptee", acct2Edit.status === 200, `recu ${acct2Edit.status}`);
+check("nom du compte modifie", acct2Edit.json?.name === "Compte secondaire (renomme)", `recu ${acct2Edit.json?.name}`);
+check("IBAN du compte modifie", acct2Edit.json?.iban === "FR7699999999999999999999999", `recu ${acct2Edit.json?.iban}`);
+check("PUT sans champ reconnu refuse", (await call("PUT", `/api/bank-accounts/${acct2.json?.id}`, {})).status === 400);
+
+const tx2 = await call("POST", "/api/transactions", {
+  account_id: acct2.json.id, tx_date: "2026-01-15", label: "Mouvement compte secondaire",
+  amount: 250, direction: "in", kind: "payment",
+});
+check("mouvement rattache au second compte", tx2.status === 201, `recu ${tx2.status}`);
+
+const acct2Del = await call("DELETE", `/api/bank-accounts/${acct2.json?.id}`);
+check("suppression du compte acceptee", acct2Del.status === 200, `recu ${acct2Del.status}`);
+const acctList = await call("GET", "/api/bank-accounts");
+check("compte supprime absent de la liste", !(acctList.json?.items || []).some((a: any) => a.id === acct2.json?.id), "compte residuel");
+
+const txsAfterDel = await call("GET", "/api/transactions?from=2026-01-01&to=2026-12-31");
+const detached = (txsAfterDel.json?.items || []).find((t: any) => t.id === tx2.json?.id);
+check("mouvement conserve apres suppression du compte", !!detached, "mouvement perdu");
+check("mouvement detache du compte (account_id nul)", detached && detached.account_id === null, `${detached?.account_id}`);
+await call("DELETE", `/api/transactions/${tx2.json?.id}`);
+
+check("suppression d'un compte inexistant -> 404", (await call("DELETE", "/api/bank-accounts/99999999")).status === 404);
+
 console.log("\n=== 5. Relances ===");
 const tpl = await call("GET", "/api/reminder-templates");
 check("3 modeles de relance par defaut", tpl.json?.items?.length === 3, `${tpl.json?.items?.length}`);

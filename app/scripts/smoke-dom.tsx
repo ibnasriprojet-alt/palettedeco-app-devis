@@ -244,6 +244,8 @@ ok("solde total affiche", has("12 450,00"), `trouve : ${text().slice(0, 90)}`);
 ok("entrees (2 500,00)", has("2 500,00"));
 ok("sorties (1 440,00)", has("1 440,00"));
 ok("compte bancaire list", has("Compte courant"));
+ok("bouton modifier le compte", html().includes("Modifier Compte courant"));
+ok("bouton supprimer le compte", html().includes("Supprimer Compte courant"));
 ok("mouvement entrant list", has("Virement recu"));
 ok("montant entrant signe +", has("+2 500,00"));
 ok("montant sortant signe -", has("−1 440,00"));

@@ -100,6 +100,8 @@ export const api = {
     request<BankAccount>("/api/bank-accounts", { method: "POST", body: JSON.stringify(b) }),
   updateBankAccount: (id: number, b: Partial<BankAccount>) =>
     request<BankAccount>(`/api/bank-accounts/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+  deleteBankAccount: (id: number) =>
+    request<{ ok: boolean; id: number }>(`/api/bank-accounts/${id}`, { method: "DELETE" }),
 
   getTransactions: (p: { from?: string; to?: string; account_id?: number }) => {
     const qs = new URLSearchParams();

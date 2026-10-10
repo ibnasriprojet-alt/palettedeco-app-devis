@@ -231,6 +231,16 @@ export function registerCockpit(deps: Deps) {
     return c.json(rows[0]);
   });
 
+  /* Suppression definitive d'un compte. Les mouvements liees ne sont pas
+     supprimes : la cle etrangere est ON DELETE SET NULL, ils sont seulement
+     detaches du compte (montant et date conserves dans l'historique). */
+  app.delete("/api/bank-accounts/:id", async (c) => {
+    const id = Number(c.req.param("id"));
+    const { rows } = await pool.query("DELETE FROM bank_accounts WHERE id = $1 RETURNING id", [id]);
+    if (!rows.length) return c.json({ error: "Compte introuvable" }, 404);
+    return c.json({ ok: true, id: rows[0].id });
+  });
+
   /* ================= Mouvements de tresorerie ================= */
   app.get("/api/transactions", async (c) => {
     const { from, to } = dateRange(c);

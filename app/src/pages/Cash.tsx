@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Landmark, Plus, Trash2, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Landmark, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { api } from "../lib/api";
 import type { BankAccount, BankTransaction } from "../lib/cockpit-types";
 import { TX_KINDS } from "../lib/cockpit-types";
@@ -22,6 +22,8 @@ export default function Cash() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [accountForm, setAccountForm] = useState(false);
+  const [editAccount, setEditAccount] = useState<BankAccount | null>(null);
+  const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null);
   const [txForm, setTxForm] = useState(false);
   const [toDelete, setToDelete] = useState<BankTransaction | null>(null);
 
@@ -118,7 +120,25 @@ export default function Cash() {
                       {a.iban ? a.iban : a.bank_name || "IBAN non renseigné"}
                     </div>
                   </div>
-                  {a.is_default && <Badge className="border-accent/40 bg-accent/15 text-accent">Principal</Badge>}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {a.is_default && <Badge className="border-accent/40 bg-accent/15 text-accent">Principal</Badge>}
+                    <button
+                      onClick={() => setEditAccount(a)}
+                      className="rounded p-1 text-ink-4 transition hover:bg-hover hover:text-ink"
+                      aria-label={`Modifier ${a.name}`}
+                      title="Modifier ce compte"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setAccountToDelete(a)}
+                      className="rounded p-1 text-ink-4 transition hover:bg-danger-soft hover:text-danger"
+                      aria-label={`Supprimer ${a.name}`}
+                      title="Supprimer ce compte"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 text-xl font-semibold tabular-nums">{eur(a.solde)}</div>
                 <div className="mt-1 text-xs text-ink-4">
@@ -218,6 +238,16 @@ export default function Cash() {
           }}
         />
       )}
+      {editAccount && (
+        <AccountForm
+          account={editAccount}
+          onClose={() => setEditAccount(null)}
+          onSaved={() => {
+            setEditAccount(null);
+            load();
+          }}
+        />
+      )}
       {txForm && (
         <TxForm
           accounts={accounts}
@@ -243,12 +273,49 @@ export default function Cash() {
           load();
         }}
       />
+
+      <ConfirmModal
+        open={!!accountToDelete}
+        danger
+        title="Supprimer ce compte bancaire ?"
+        body={
+          accountToDelete ? (
+            <>
+              Le compte <strong>{accountToDelete.name}</strong> sera supprimé définitivement. Les mouvements qui y sont rattachés{" "}
+              <strong>ne seront pas supprimés</strong> : ils resteront dans l'historique, simplement détachés de ce compte.
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="Supprimer le compte"
+        onCancel={() => setAccountToDelete(null)}
+        onConfirm={async () => {
+          if (!accountToDelete) return;
+          try {
+            await api.deleteBankAccount(accountToDelete.id);
+            setAccountToDelete(null);
+            load();
+          } catch (e) {
+            setError((e as Error).message);
+            setAccountToDelete(null);
+          }
+        }}
+      />
     </>
   );
 }
 
-function AccountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState({ name: "", bank_name: "", iban: "", bic: "", opening_balance: "", is_default: true });
+function AccountForm({ account, onClose, onSaved }: { account?: BankAccount; onClose: () => void; onSaved: () => void }) {
+  const editing = !!account;
+  const [f, setF] = useState({
+    name: account?.name || "",
+    bank_name: account?.bank_name || "",
+    iban: account?.iban || "",
+    bic: account?.bic || "",
+    opening_balance: account ? String(account.opening_balance ?? "") : "",
+    is_default: account ? !!account.is_default : true,
+  });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
@@ -257,7 +324,9 @@ function AccountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
     setBusy(true);
     setErr("");
     try {
-      await api.createBankAccount({ ...f, opening_balance: Number(f.opening_balance) || 0 });
+      const payload = { ...f, opening_balance: Number(f.opening_balance) || 0 };
+      if (editing) await api.updateBankAccount(account!.id, payload);
+      else await api.createBankAccount(payload);
       onSaved();
     } catch (e) {
       setErr((e as Error).message);
@@ -266,7 +335,7 @@ function AccountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   };
 
   return (
-    <Modal open title="Nouveau compte bancaire" onClose={onClose} width="max-w-lg">
+    <Modal open title={editing ? "Modifier le compte bancaire" : "Nouveau compte bancaire"} onClose={onClose} width="max-w-lg">
       <div className="space-y-4">
         {err && <div className="rounded-lg border border-danger-line bg-danger-soft px-3 py-2 text-sm text-danger">{err}</div>}
         <Field label="Nom du compte *">
@@ -301,7 +370,7 @@ function AccountForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
             Annuler
           </button>
           <button onClick={save} disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-50">
-            {busy ? "Enregistrement…" : "Créer le compte"}
+            {busy ? "Enregistrement…" : editing ? "Enregistrer" : "Créer le compte"}
           </button>
         </div>
       </div>
