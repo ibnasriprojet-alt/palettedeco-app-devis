@@ -540,11 +540,11 @@ export function registerCockpit(deps: Deps) {
      l'appelant agrege (utile pour un envoi groupe ou l'echec d'une facture ne
      doit pas interrompre les suivantes). */
   async function deliverReminder(invoiceId: number, level: number, channel?: string) {
-    if (!Number.isFinite(invoiceId) || invoiceId <= 0) return { ok: false as const, status: 400, error: "Facture invalide" };
+    if (!Number.isFinite(invoiceId) || invoiceId <= 0) return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Facture invalide" };
     const settings = await loadAppSettings(pool);
     const templates = await loadTemplates(pool);
     const tpl = templates.find((t) => t.level === level);
-    if (!tpl) return { ok: false as const, status: 404, error: "Modèle de relance introuvable" };
+    if (!tpl) return { ok: false as const, status: 404, invoice_id: invoiceId, error: "Modèle de relance introuvable" };
 
     const { rows } = await pool.query(
       `SELECT i.*, cl.name AS client, cl.email,
@@ -552,15 +552,15 @@ export function registerCockpit(deps: Deps) {
          FROM invoices i LEFT JOIN clients cl ON cl.id = i.client_id WHERE i.id = $1`,
       [invoiceId],
     );
-    if (!rows.length) return { ok: false as const, status: 404, error: "Facture introuvable" };
+    if (!rows.length) return { ok: false as const, status: 404, invoice_id: invoiceId, error: "Facture introuvable" };
     const invoice = rows[0];
-    if (!invoice.email) return { ok: false as const, status: 400, error: "Cette facture n'a pas d'adresse e-mail client." };
+    if (!invoice.email) return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Cette facture n'a pas d'adresse e-mail client." };
 
     const company = await deps.loadCompany();
     const rendered = renderReminder(tpl, invoice, company, settings);
     const target = resolveRecipient(settings, invoice.email);
     if (!target.to) {
-      return { ok: false as const, status: 400, error: "Mode test actif mais aucune adresse de test renseignée : rien n'a été envoyé." };
+      return { ok: false as const, status: 400, invoice_id: invoiceId, error: "Mode test actif mais aucune adresse de test renseignée : rien n'a été envoyé." };
     }
     const reste = Number(invoice.total_ttc) - Number(invoice.paid);
 
@@ -595,7 +595,7 @@ export function registerCockpit(deps: Deps) {
         rec.rows[0].id,
         String((e as Error).message).slice(0, 300),
       ]);
-      return { ok: false as const, status: 502, error: "Envoi impossible", detail: (e as Error).message };
+      return { ok: false as const, status: 502, invoice_id: invoiceId, error: "Envoi impossible", detail: (e as Error).message };
     }
   }
 

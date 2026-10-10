@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, BASE } from "../lib/api";
 import { fmt, fmtDate, today } from "../lib/format";
 import { Badge, Button, Card, Spinner } from "../components/ui";
-import { Check, FileText, X } from "lucide-react";
+import { Check, Eye, FileText, Mail, X } from "lucide-react";
 
 interface PublicInfo {
   number: string;
@@ -18,6 +18,8 @@ interface PublicInfo {
   conditions: string;
   notes: string;
   client: { name: string } | null;
+  has_email: boolean;
+  pdf_url: string;
   items: Array<{ description: string; quantity: number | string; unit_price: number | string; tva_rate: number | string }>;
   company: { name: string; phone: string; email: string };
 }
@@ -28,8 +30,12 @@ export default function PublicAccept() {
 
   const [data, setData] = useState<PublicInfo | null>(null);
   const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
   const [state, setState] = useState<"loading" | "ready" | "done" | "already" | "closed">("loading");
   const [busy, setBusy] = useState(false);
+  const [emailRequired, setEmailRequired] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailNote, setEmailNote] = useState("");
 
   useEffect(() => {
     if (!id || !sig) {
@@ -58,17 +64,49 @@ export default function PublicAccept() {
       });
   }, [id, sig]);
 
-  async function accept() {
+  async function accept(withEmail?: string, fromForm = false) {
     if (!id) return;
     setBusy(true);
     setError("");
+    setFormError("");
+    setEmailNote("");
     try {
-      const res = await api.acceptPublicQuote(Number(id), sig);
+      const res = await api.acceptPublicQuote(Number(id), sig, withEmail);
+      if (res.email_required) {
+        setEmailRequired(true);
+        setBusy(false);
+        return;
+      }
       setState(res.already ? "already" : "done");
+      if (res.email_sent) {
+        setEmailNote(
+          !res.redirected
+            ? "Le devis vient de vous être envoyé par e-mail."
+            : "Le devis a été envoyé (mode test de l'entreprise).",
+        );
+      } else if (res.email_error) {
+        setEmailNote(
+          res.redirected
+            ? "Devis validé — l'envoi par e-mail sera fait par l'entreprise (mode test)."
+            : `Devis validé, mais l'envoi par e-mail a échoué (${res.email_error}).`,
+        );
+      }
+      if (fromForm) setEmailRequired(false);
     } catch (e) {
       setError((e as Error).message);
+      setFormError((e as Error).message);
       setBusy(false);
     }
+  }
+
+  function submitEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      setFormError("Veuillez saisir une adresse e-mail valide.");
+      return;
+    }
+    setFormError("");
+    accept(email.trim(), true);
   }
 
   return (
@@ -87,7 +125,12 @@ export default function PublicAccept() {
               <Check className="h-6 w-6" />
             </div>
             <h2 className="text-lg font-semibold text-ink">Devis {data?.number || ""} accepté</h2>
-            <p className="mt-1 text-sm text-ink-3">Merci ! Une facture va être établie et vous recevrez le détail par e-mail.</p>
+            <p className="mt-1 text-sm text-ink-3">Merci ! Une facture va être établie.</p>
+            {emailNote ? (
+              <p className="mt-3 rounded-lg bg-subtle px-3 py-2 text-sm text-ink-3">{emailNote}</p>
+            ) : (
+              <p className="mt-3 text-sm text-ink-4">Vous recevrez le détail par e-mail.</p>
+            )}
             {data?.company.phone ? (
               <a href={`tel:${data.company.phone.replace(/\s+/g, "")}`} className="mt-4 block text-sm text-accent hover:underline">
                 {data.company.phone}
@@ -107,13 +150,15 @@ export default function PublicAccept() {
               <span className="text-lg font-semibold text-ink">{fmt(data?.total_ttc ?? 0)}</span>
             </div>
           </Card>
-        ) : error ? (
-          <Card className="text-danger">
-            <div className="flex items-center gap-2">
-              <X className="h-4 w-4" /> {error}
-            </div>
-          </Card>
-        ) : data ? (
+        ) : !data ? (
+          error ? (
+            <Card className="text-danger">
+              <div className="flex items-center gap-2">
+                <X className="h-4 w-4" /> {error}
+              </div>
+            </Card>
+          ) : null
+        ) : (
           <Card>
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -159,26 +204,61 @@ export default function PublicAccept() {
 
             {data.conditions && <div className="mt-4 text-xs text-ink-4">Conditions : {data.conditions}</div>}
 
-            {state === "ready" ? (
-              <>
-                <Button className="mt-5 w-full" onClick={accept} disabled={busy}>
-                  <Check className="h-4 w-4" /> {busy ? "Validation..." : "Accepter le devis"}
-                </Button>
-                <p className="mt-2 text-center text-xs text-ink-4">
-                  En acceptant, vous validez le montant et les prestations ci-dessus.
+            {state === "ready" ? emailRequired ? (
+                <form onSubmit={submitEmail} className="mt-5 space-y-2">
+                  <p className="text-sm text-ink-3">
+                    Pour vous envoyer le devis par e-mail, indiquez votre adresse e-mail :
+                  </p>
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2.5 text-sm text-ink outline-none focus:border-accent"
+                    placeholder="votre@email.fr"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoFocus
+                  />
+                  {formError && <p className="text-sm text-danger">{formError}</p>}
+                  <Button className="w-full" type="submit" disabled={busy}>
+                    <Mail className="h-4 w-4" /> {busy ? "Envoi en cours..." : "Recevoir le devis par e-mail"}
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  {data.pdf_url && (
+                    <a
+                      href={`${BASE}${data.pdf_url}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line px-3 py-2 text-sm text-ink-3 transition hover:bg-hover"
+                    >
+                      <Eye className="h-4 w-4" /> Voir le devis en PDF
+                    </a>
+                  )}
+                  <Button className="mt-3 w-full" onClick={() => accept()} disabled={busy}>
+                    <Check className="h-4 w-4" /> {busy ? "Validation..." : "Accepter le devis"}
+                  </Button>
+                  {!data.has_email && !error && (
+                    <p className="mt-2 text-xs text-ink-4">
+                      Vous recevrez ensuite le devis par e-mail.
+                    </p>
+                  )}
+                  {error && <p className="mt-2 text-center text-sm text-danger">{error}</p>}
+                  <p className="mt-2 text-center text-xs text-ink-4">
+                    En acceptant, vous validez le montant et les prestations ci-dessus.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-5 rounded-lg bg-subtle px-3 py-2 text-center text-sm text-ink-3">
+                  {data.invoiced
+                    ? "Ce devis a été converti en facture."
+                    : data.status === "declined"
+                      ? "Ce devis a été refusé et n'est plus validable."
+                      : "Ce devis n'est plus valide."}
                 </p>
-              </>
-            ) : (
-              <p className="mt-5 rounded-lg bg-subtle px-3 py-2 text-center text-sm text-ink-3">
-                {data.invoiced
-                  ? "Ce devis a été converti en facture."
-                  : data.status === "declined"
-                    ? "Ce devis a été refusé et n'est plus validable."
-                    : "Ce devis n'est plus valide."}
-              </p>
-            )}
+              )}
           </Card>
-        ) : null}
+        )}
       </div>
     </div>
   );

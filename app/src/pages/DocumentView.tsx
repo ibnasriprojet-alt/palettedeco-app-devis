@@ -24,6 +24,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [shareMsg, setShareMsg] = useState("");
+  const [shareUrl, setShareUrl] = useState("");
   const [waMsg, setWaMsg] = useState("");
   const [payForm, setPayForm] = useState({ amount: "", method: "Virement", date: today(), note: "" });
 
@@ -41,6 +42,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     setEmailTo("");
     setEmailMsg(null);
     setShareMsg("");
+    setShareUrl("");
     setWaMsg("");
     setInvoiceNumber("");
     setPayForm({ amount: "", method: "Virement", date: today(), note: "" });
@@ -149,15 +151,28 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     try {
       const { sig } = await api.shareQuote(doc.id);
       const url = `${location.origin}/accept/${doc.id}?sig=${encodeURIComponent(sig)}`;
+      setShareUrl(url);
       try {
         await navigator.clipboard.writeText(url);
-        setShareMsg("Lien de validation copié !");
+        setShareMsg("Lien copié dans le presse-papiers !");
       } catch {
-        setShareMsg(url);
+        setShareMsg("Copiez le lien ci-dessous pour l'envoyer au client.");
       }
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  async function shareWhatsApp() {
+    if (!doc) return;
+    const url = shareUrl || (async () => {
+      const { sig } = await api.shareQuote(doc.id);
+      return `${location.origin}/accept/${doc.id}?sig=${encodeURIComponent(sig)}`;
+    })();
+    const link = typeof url === "string" ? url : await url;
+    setShareUrl(link);
+    const text = `Bonjour,\nvoici le lien pour consulter et valider votre devis ${doc.number} :\n${link}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
   async function publicPdfUrl(): Promise<string> {
@@ -537,6 +552,22 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   <Button variant="ghost" onClick={shareLink}>
                     <Share2 className="h-4 w-4" /> Lien de validation en ligne
                   </Button>
+                )}
+                {shareUrl && (
+                  <div className="flex w-full items-stretch gap-2 sm:max-w-xl">
+                    <input
+                      readOnly
+                      className={inputCls + " min-w-0 flex-1 text-xs"}
+                      value={shareUrl}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <Button variant="ghost" onClick={() => { navigator.clipboard?.writeText(shareUrl); setShareMsg("Lien récopié !"); }}>
+                      <Link2 className="h-4 w-4" /> Copier
+                    </Button>
+                    <Button variant="ghost" onClick={shareWhatsApp}>
+                      <MessageCircle className="h-4 w-4" /> WhatsApp
+                    </Button>
+                  </div>
                 )}
                 {(emailMsg || shareMsg || waMsg) && (
                   <div className="text-sm sm:w-full">

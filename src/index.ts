@@ -1588,6 +1588,8 @@ app.get("/api/public/quote/:id/info", async (c) => {
     conditions: q.conditions,
     notes: q.notes,
     client: q.client ? { name: q.client.name } : null,
+    has_email: !!(q.client && String(q.client.email || "").trim()),
+    pdf_url: `/api/pdf-share/quote/${id}/${await pdfShareToken("quote", id)}`,
     items: (q.items || []).map((it) => ({
       description: it.description, quantity: it.quantity, unit_price: it.unit_price, tva_rate: it.tva_rate,
     })),
@@ -1614,8 +1616,48 @@ app.post("/api/public/quote/:id/accept", async (c) => {
   if (q.status === "declined") {
     return c.json({ error: "Ce devis a été refusé et ne peut plus être accepté." }, 409);
   }
+
+  /* E-mail du client : celui que nous avons en base, ou celui fourni par le
+     client. Si nous n'avons pas d'adresse, on demande la sienne avant de
+     valider : l'acceptation n'est enregistree que si un e-mail existe. */
+  const provided = String(body.email || "").trim();
+  const client = q.client_id ? (await pool.query("SELECT email FROM clients WHERE id = $1", [q.client_id])).rows[0] : null;
+  const current = client && String(client.email || "").trim();
+  const targetEmail = provided || current;
+  if (!targetEmail) {
+    return c.json({ ok: false, email_required: true }, 400);
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(targetEmail)) {
+    return c.json({ error: "Veuillez saisir une adresse e-mail valide." }, 400);
+  }
+
+  if (provided && provided !== current) {
+    await pool.query("UPDATE clients SET email = $1 WHERE id = $2", [provided, q.client_id]);
+  }
   await pool.query("UPDATE quotes SET status = 'accepted', updated_at = now() WHERE id = $1", [id]);
-  return c.json({ ok: true, number: q.number });
+
+  /* Envoi du devis par e-mail (meilleur effort : l'acceptation reste acquise
+     meme si l'envoi echoue). En mode Test, le message part vers l'adresse de
+     test au lieu du client. */
+  let email_sent = false;
+  let redirected = false;
+  let mode: string | null = null;
+  let email_error = "";
+  try {
+    const r = await emailDocument({ type: "quote", id, to: targetEmail });
+    if (r.ok) {
+      email_sent = true;
+      redirected = !!r.redirected;
+      mode = r.mode || null;
+    } else if (r.blocked === "NO_TEST_EMAIL") {
+      email_error = "Envoi bloqué : mode test actif mais aucune adresse de test renseignée.";
+    } else if ((r as { error?: string }).error) {
+      email_error = String((r as { error?: string }).error);
+    }
+  } catch (e) {
+    email_error = (e as Error).message;
+  }
+  return c.json({ ok: true, number: q.number, email_sent, redirected, mode, email_error });
 });
 
 /* ---------- Envoi email (Brevo / Resend) ---------- */
@@ -1657,42 +1699,33 @@ function emailFailureDetail(j: Record<string, unknown>) {
   }
   return { status: 502, body: { error: "EMAIL_FAILED", detail: j.message || "erreur inconnue", code: (j as { code?: unknown }).code } };
 }
-app.post("/api/send-document", async (c) => {
-  if (!BREVO_API_KEY && !RESEND_API_KEY) {
-    return c.json({
-      error: "EMAIL_NOT_CONFIGURED",
-      hint: "Ajoutez BREVO_API_KEY (ou RESEND_API_KEY) et EMAIL_FROM (adresse vérifiée) pour activer l'envoi par email.",
-    }, 400);
-  }
-  const b = await c.req.json();
-  const type = b.type === "invoice" ? "invoice" : b.type === "order" ? "order" : "quote";
-  const id = Number(b.id);
+/* Envoi d'un document (devis/facture/commande) par e-mail, avec le PDF joint.
+   Partage le rendu (objet, texte, piece jointe, garde-fou Mode Test) entre
+   /api/send-document et l'acceptation publique d'un devis. */
+async function emailDocument(args: { type: "quote" | "order" | "invoice"; id: number; to: string; copy?: boolean }) {
+  const type = args.type;
+  const id = Number(args.id);
   const doc = await getDoc(type, id);
-  if (!doc) return c.json({ error: "Document introuvable" }, 404);
-  const clientEmail = String((doc.client && doc.client.email) || "").trim();
-  const requested = String(b.to || "").trim() || clientEmail;
-  if (!requested) return c.json({ error: "Adresse e-mail du client manquante. Renseignez l'e-mail du client." }, 400);
+  if (!doc) return { error: "Document introuvable" };
+  const requested = String(args.to || "").trim();
+  if (!requested) return { error: "EMAIL_MISSING" };
+  if (!BREVO_API_KEY && !RESEND_API_KEY) return { error: "EMAIL_NOT_CONFIGURED" };
 
   /* Garde-fou Mode Test : tant que le mode Reel n'est pas active explicitement,
      le message part vers l'adresse de test et jamais vers le client. */
   const settings = await loadAppSettings(pool);
   const { to, redirected, mode } = resolveRecipient(settings, requested);
-  if (!to) {
-    return c.json({
-      error: "Mode test actif mais aucune adresse de test renseignee : aucun envoi n'a ete effectue.",
-      need_test_email: true,
-    }, 400);
-  }
-  const meta = { redirected, mode };
+  if (!to) return { blocked: "NO_TEST_EMAIL", redirected, mode };
+
   const company = await loadCompany();
   const safeFrom = (function () {
     const m = EMAIL_FROM.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
     return m ? { name: m[1] || company.name || "PaletteD&co", email: m[2] } : { name: company.name || "PaletteD&co", email: EMAIL_FROM };
   })();
-  const cc = b.copy ? [{ email: safeFrom.email }] : [];
+  const cc = args.copy ? [{ email: safeFrom.email }] : [];
   const label = type === "invoice" ? "facture" : type === "order" ? "bon de commande" : "devis";
   const pdf = await buildDocumentPdf(type, id);
-  if (!pdf) return c.json({ error: "PDF impossible" }, 500);
+  if (!pdf) return { error: "PDF impossible" };
   const subject = (redirected ? "[TEST] " : "") + `${label === "facture" ? "Facture" : label === "bon de commande" ? "Bon de commande" : "Devis"} ${doc.number} - ${company.name || "PaletteD&co"}`;
   const text = [
     `Bonjour,`,
@@ -1727,46 +1760,66 @@ app.post("/api/send-document", async (c) => {
 
   if (BREVO_API_KEY) {
     const sender = (await brevoValidatedSender(safeFrom.email)) || safeFrom.email;
-    try {
-      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sender: { name: company.name || safeFrom.name, email: sender },
-          replyTo: { email: safeFrom.email, name: safeFrom.name },
-          to: [{ email: to }],
-          cc: cc.length ? cc : undefined,
-          subject,
-          textContent: text,
-          attachment: [{ name: `${doc.number}.pdf`, content: pdfB64 }],
-        }),
-      });
-      const j: Record<string, unknown> = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const f = emailFailureDetail(j);
-        if (RESEND_API_KEY) {
-          try {
-            return c.json({ ok: true, id: await tryResend(), via: "resend", ...meta });
-          } catch (e) {
-            return c.json({ error: "EMAIL_FAILED", detail: `${f.body.detail} | ${(e as Error).message}` }, 502);
-          }
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: { "api-key": BREVO_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: { name: company.name || safeFrom.name, email: sender },
+        replyTo: { email: safeFrom.email, name: safeFrom.name },
+        to: [{ email: to }],
+        cc: cc.length ? cc : undefined,
+        subject,
+        textContent: text,
+        attachment: [{ name: `${doc.number}.pdf`, content: pdfB64 }],
+      }),
+    });
+    const j: Record<string, unknown> = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const f = emailFailureDetail(j);
+      if (RESEND_API_KEY) {
+        try {
+          return { ok: true, via: "resend", id: await tryResend(), redirected, mode };
+        } catch (e) {
+          throw new Error(`Brevo : ${f.body.detail} | ${(e as Error).message}`);
         }
-        return c.json(f.body, f.status as any);
       }
-      return c.json({ ok: true, id: (j as { messageId?: unknown }).messageId, via: "brevo", ...meta });
-    } catch (e) {
-      return c.json({ error: "EMAIL_FAILED", detail: (e as Error).message }, 502);
+      throw new Error(`Brevo : ${f.body.detail}`);
     }
+    return { ok: true, via: "brevo", id: (j as { messageId?: unknown }).messageId, redirected, mode };
   }
+  return { ok: true, via: "resend", id: await tryResend(), redirected, mode };
+}
 
-  if (RESEND_API_KEY) {
-    try {
-      return c.json({ ok: true, id: await tryResend(), via: "resend", ...meta });
-    } catch (e) {
-      return c.json({ error: "EMAIL_FAILED", detail: (e as Error).message }, 502);
-    }
+app.post("/api/send-document", async (c) => {
+  const b = await c.req.json();
+  const type = b.type === "invoice" ? "invoice" : b.type === "order" ? "order" : "quote";
+  const id = Number(b.id);
+  const doc = await getDoc(type, id);
+  if (!doc) return c.json({ error: "Document introuvable" }, 404);
+  const clientEmail = String((doc.client && doc.client.email) || "").trim();
+  const requested = String(b.to || "").trim() || clientEmail;
+  if (!requested) return c.json({ error: "Adresse e-mail du client manquante. Renseignez l'e-mail du client." }, 400);
+
+  let r;
+  try {
+    r = await emailDocument({ type, id, to: requested, copy: !!b.copy });
+  } catch (e) {
+    return c.json({ error: "EMAIL_FAILED", detail: (e as Error).message }, 502);
   }
-  return c.json({ error: "EMAIL_NOT_CONFIGURED", hint: "Aucune clé (BREVO_API_KEY/RESEND_API_KEY) configurée." }, 400);
+  if (r.error === "EMAIL_NOT_CONFIGURED") {
+    return c.json({
+      error: "EMAIL_NOT_CONFIGURED",
+      hint: "Ajoutez BREVO_API_KEY (ou RESEND_API_KEY) et EMAIL_FROM (adresse vérifiée) pour activer l'envoi par email.",
+    }, 400);
+  }
+  if (r.blocked === "NO_TEST_EMAIL") {
+    return c.json({
+      error: "Mode test actif mais aucune adresse de test renseignee : aucun envoi n'a ete effectue.",
+      need_test_email: true,
+    }, 400);
+  }
+  if (!r.ok) return c.json({ error: r.error || "EMAIL_FAILED" }, 400);
+  return c.json({ ok: true, id: r.id, via: r.via, redirected: r.redirected, mode: r.mode });
 });
 
 /* ---------- PDF (téléchargement) ---------- */

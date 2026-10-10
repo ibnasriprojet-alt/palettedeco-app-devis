@@ -323,6 +323,66 @@ if (fxConv3.json?.id > 0) createdInvoiceIds.push(fxConv3.json.id);
 const fxEmpty = await call("GET", `/api/invoices/${fxConv3.json?.id}/facturx.xml`);
 check("facture sans ligne -> 422 explicite", fxEmpty.status === 422, `recu ${fxEmpty.status}`);
 
+console.log("\n=== 8. Lien de validation en ligne ===");
+/* Client SANS e-mail : l'acceptation doit demander l'adresse avant de valider,
+   puis accepter, enregistrer le mail et envoyer le devis (envoi simule). */
+const vaClient = await call("POST", "/api/clients", { name: "Client Accept Test", email: "" });
+if (vaClient.json?.id > 0) createdClientIds.push(vaClient.json.id);
+const vaQuote = await call("POST", "/api/quotes", {
+  client_id: vaClient.json?.id, status: "sent", issue_date: "2026-09-20", valid_until: "2026-10-20",
+  items: [{ description: "Prestation test", quantity: 1, unit_price: 100, tva_rate: 20 }],
+});
+if (vaQuote.json?.id > 0) createdQuoteIds.push(vaQuote.json.id);
+const vaId = vaQuote.json?.id;
+const vaShare = await call("GET", `/api/quotes/${vaId}/share`);
+const vaSig = vaShare.json?.sig || "";
+check("lien de partage renvoie une signature", typeof vaSig === "string" && vaSig.length > 10, `recu ${String(vaSig).slice(0, 20)}`);
+const vaInfo = await call("GET", `/api/public/quote/${vaId}/info?sig=${encodeURIComponent(vaSig)}`);
+check("info publique sans e-mail -> has_email=false", vaInfo.json?.has_email === false, `recu ${JSON.stringify(vaInfo.json).slice(0, 80)}`);
+check("info publique fournit un lien PDF", typeof vaInfo.json?.pdf_url === "string" && vaInfo.json.pdf_url.includes("/api/pdf-share/quote/"), `recu ${vaInfo.json?.pdf_url}`);
+const vaNoMail = await call("POST", `/api/public/quote/${vaId}/accept`, { sig: vaSig });
+check("accept sans e-mail -> email_required (400)", vaNoMail.status === 400 && vaNoMail.json?.email_required === true, `recu ${vaNoMail.status} ${JSON.stringify(vaNoMail.json)}`);
+const vaBefore = await call("GET", `/api/quotes/${vaId}`);
+check("devis non accepte tant que l'e-mail n'est pas fourni", vaBefore.json?.status === "sent", `recu ${vaBefore.json?.status}`);
+
+const realFetchMail = globalThis.fetch;
+globalThis.fetch = (async (input: any, init?: any) => {
+  const url = typeof input === "string" ? input : (input as any).url;
+  if (url.includes("api.brevo.com")) {
+    if (url.includes("/senders")) {
+      return new Response(JSON.stringify({ senders: [{ email: "palettedeco@outlook.com", active: true }] }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.includes("/smtp/email")) {
+      return new Response(JSON.stringify({ messageId: "acc-test" }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+  }
+  return realFetchMail(input, init);
+}) as typeof fetch;
+
+const vaMail = await call("POST", `/api/public/quote/${vaId}/accept`, { sig: vaSig, email: "client@accept-test.fr" });
+check("accept avec e-mail -> ok", vaMail.status === 200 && vaMail.json?.ok === true, `recu ${vaMail.status} ${JSON.stringify(vaMail.json)}`);
+check("devis envoye par e-mail", vaMail.json?.email_sent === true, `recu ${JSON.stringify(vaMail.json)}`);
+globalThis.fetch = realFetchMail;
+
+const vaAfter = await call("GET", `/api/quotes/${vaId}`);
+check("devis passe a 'accepted'", vaAfter.json?.status === "accepted", `recu ${vaAfter.json?.status}`);
+const vaClientAfter = await call("GET", "/api/clients");
+check("e-mail du client enregistre", (vaClientAfter.json || []).some((cl: any) => cl.id === vaClient.json?.id && cl.email === "client@accept-test.fr"), "email non mis a jour");
+const vaAgain = await call("POST", `/api/public/quote/${vaId}/accept`, { sig: vaSig, email: "client@accept-test.fr" });
+check("re-accept -> deja accepte", vaAgain.status === 200 && vaAgain.json?.already === true, `recu ${vaAgain.status} ${JSON.stringify(vaAgain.json)}`);
+const vaBadSig = await call("POST", `/api/public/quote/${vaId}/accept`, { sig: "faux" });
+check("mauvaise signature rejetee", vaBadSig.status === 403, `recu ${vaBadSig.status}`);
+
+/* Devis refuse : impossible a accepter. */
+const vaQ2 = await call("POST", "/api/quotes", {
+  client_id: vaClient.json?.id, status: "draft",
+  items: [{ description: "Prestation refusee", quantity: 1, unit_price: 50, tva_rate: 20 }],
+});
+if (vaQ2.json?.id > 0) createdQuoteIds.push(vaQ2.json.id);
+await call("POST", `/api/quotes/${vaQ2.json?.id}/status`, { status: "declined" });
+const vaDecl = await call("POST", `/api/public/quote/${vaQ2.json?.id}/accept`, { sig: (await call("GET", `/api/quotes/${vaQ2.json?.id}/share`)).json?.sig });
+check("devis refuse -> 409", vaDecl.status === 409, `recu ${vaDecl.status}`);
+
 /* Nettoyage : une seule passe, par identifiant, sur la base de dev.
    Les factures finalisees sont effacees en SQL car l'API les protege.
    Les reglages societe sont restaures : sans cela le test laissait a demeure

@@ -211,11 +211,11 @@ export const api = {
 
   getPublicQuote: (id: number, sig: string) =>
     request<any>(`/api/public/quote/${id}/info?sig=${encodeURIComponent(sig)}`),
-  acceptPublicQuote: (id: number, sig: string) =>
-    request<{ ok: boolean; already?: boolean; number?: string }>(`/api/public/quote/${id}/accept`, {
-      method: "POST",
-      body: JSON.stringify({ sig }),
-    }),
+  acceptPublicQuote: (id: number, sig: string, email?: string) =>
+    request<{ ok: boolean; already?: boolean; number?: string; email_sent?: boolean; redirected?: boolean; mode?: string; email_error?: string; email_required?: boolean }>(
+      `/api/public/quote/${id}/accept`,
+      { method: "POST", body: JSON.stringify({ sig, email }) },
+    ),
 
   sendDocument: (type: "quote" | "invoice" | "order", id: number, to: string, copy = false) =>
     request<{ ok: boolean }>("/api/send-document", { method: "POST", body: JSON.stringify({ type, id, to, copy }) }),
