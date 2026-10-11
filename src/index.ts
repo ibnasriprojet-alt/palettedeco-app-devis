@@ -167,6 +167,7 @@ function computeTotals(items) {
 }
 
 async function autoNext(client, table, prefix, year) {
+  const key = `${prefix}-${year}`;
   const pattern = `^${prefix.toUpperCase()}-${year}-[0-9]+$`;
   const { rows } = await client.query(
     `SELECT number FROM ${table} WHERE number ~ $1`,
@@ -177,11 +178,19 @@ async function autoNext(client, table, prefix, year) {
     const m = String(r.number).match(/-(\d+)$/);
     if (m) max = Math.max(max, parseInt(m[1], 10));
   }
-  const next = max + 1;
+  /* Numérotation monotone : le compteur garde le plus grand numéro déjà émis.
+     Supprimer un document ne permet donc pas de réutiliser son numéro. */
+  const { rows: cRows } = await client.query(
+    `SELECT value FROM counters WHERE kind = $1`,
+    [key],
+  );
+  const prev = cRows[0] ? Number(cRows[0].value) || 0 : 0;
+  const floor = Math.max(max, prev);
+  const next = floor + 1;
   await client.query(
     `INSERT INTO counters (kind, value) VALUES ($1, $2)
-     ON CONFLICT (kind) DO UPDATE SET value = EXCLUDED.value`,
-    [`${prefix}-${year}`, max],
+     ON CONFLICT (kind) DO UPDATE SET value = GREATEST(counters.value, EXCLUDED.value)`,
+    [key, floor],
   );
   return `${prefix.toUpperCase()}-${year}-${String(next).padStart(3, "0")}`;
 }
@@ -1418,10 +1427,18 @@ app.delete("/api/invoices/:id", async (c) => {
     );
   }
   if (inv.quote_id) {
-    await pool.query(
-      "UPDATE quotes SET status = 'accepted', updated_at = now() WHERE id = $1 AND status = 'invoiced'",
-      [inv.quote_id],
+    /* Ne rebascule le devis en 'accepted' que s'il ne lui reste aucune autre
+       facture : un même devis peut avoir plusieurs factures. */
+    const siblings = await pool.query(
+      "SELECT 1 FROM invoices WHERE quote_id = $1 AND id <> $2 LIMIT 1",
+      [inv.quote_id, id],
     );
+    if (siblings.rowCount === 0) {
+      await pool.query(
+        "UPDATE quotes SET status = 'accepted', updated_at = now() WHERE id = $1 AND status = 'invoiced'",
+        [inv.quote_id],
+      );
+    }
   }
   await pool.query("DELETE FROM invoices WHERE id = $1", [id]);
   return c.json({ ok: true });

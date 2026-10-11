@@ -254,6 +254,18 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     }
   }
 
+  async function removeInvoice() {
+    if (!doc || !isInvoice) return;
+    if (!confirm(`Supprimer définitivement la facture ${doc.number} ? Action irréversible.`)) return;
+    setError("");
+    try {
+      await api.deleteInvoice(doc.id);
+      navigate("/invoices");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   const invoice = isInvoice ? (doc as Invoice | null) : null;
   const paidTotal = invoice ? money(Number(invoice.paid ?? 0)) : 0;
   const overall = invoice
@@ -515,9 +527,19 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                         {statusLabels[s]}
                       </Button>
                     ))}
-                    <span className="ml-auto">
+                    <div className="ml-auto flex items-center gap-2">
                       <Badge className={statusColors[doc.status]}>{statusLabels[doc.status]}</Badge>
-                    </span>
+                      {isInvoice && !invoice?.finalized && (
+                        <Button
+                          variant="ghost"
+                          className="text-danger"
+                          onClick={removeInvoice}
+                          title="Supprimer cette facture (elle n'est pas finalisée)"
+                        >
+                          <Trash2 className="h-4 w-4" /> Supprimer
+                        </Button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>

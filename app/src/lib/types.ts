@@ -150,6 +150,8 @@ export interface Invoice {
   payments?: Payment[];
   paid?: number;
   remaining?: number;
+  finalized?: boolean;
+  finalized_at?: string | null;
 }
 
 export interface ClientHistory {
