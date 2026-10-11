@@ -91,12 +91,15 @@
   --color-brand-2: var(--brand-2);
   --color-brand-soft: var(--brand-soft);
   --color-brand-line: var(--brand-line);
+  --color-brand-ink: var(--ink);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-success-line: var(--success-line);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-line: var(--danger-line);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Fraunces", ui-serif, Georgia, "Times New Roman", serif;
 }
 
 html,
@@ -107,7 +110,17 @@ body {
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Curseur pointeur sur toute cible interactive (sauf les elements desactives).
+   Tailwind v4 reinitialise le curseur des boutons, ce qui rend l'app "inert". */
+button:not(:disabled),
+[role="button"]:not(:disabled),
+details summary,
+select,
+label[for] {
+  cursor: pointer;
 }
 
 input,
@@ -120,7 +133,18 @@ input:focus,
 textarea:focus,
 select:focus {
   border-color: var(--ring);
-  box-shadow: 0 0 0 1px var(--ring);
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* Anneau visible au clavier pour boutons/liens (les champs gardent leur bordure). */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
 }
 
 /* ---------- Document A4 ----------

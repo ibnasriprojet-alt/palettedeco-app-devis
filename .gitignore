@@ -10,3 +10,4 @@ app/dist/
 app/node_modules/
 .vercel
 .env*
+tsconfig.tsbuildinfo

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { X } from "lucide-react";
 import { cn } from "../lib/cn";
 
 export const inputCls =
@@ -18,12 +19,13 @@ export function Button({
       "bg-accent text-accent-ink hover:bg-accent-hover font-semibold shadow",
     danger: "bg-danger text-white hover:brightness-110",
     ghost: "border border-line-2 text-ink hover:bg-hover",
-    dark: "bg-surface-3 text-ink hover:bg-surface-3 border border-line",
+    dark: "bg-surface-3 text-ink hover:bg-line-2 border border-line",
   };
   return (
     <button
+      type="button"
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition disabled:opacity-50",
+        "inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
         styles[variant],
         className,
       )}
@@ -49,7 +51,7 @@ export function LinkButton({
     primary:
       "bg-accent text-accent-ink hover:bg-accent-hover font-semibold shadow",
     ghost: "border border-line-2 text-ink hover:bg-hover",
-    dark: "bg-surface-3 text-ink hover:bg-surface-3 border border-line",
+    dark: "bg-surface-3 text-ink hover:bg-line-2 border border-line",
   };
   return (
     <Link
@@ -154,7 +156,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 cursor-pointer bg-black/70" onClick={onClose} aria-label="Fermer la fenêtre" role="button" />
       <div
         ref={ref}
         tabIndex={-1}
@@ -164,8 +166,13 @@ export function Modal({
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="font-semibold text-ink">{title}</h3>
-          <button onClick={onClose} aria-label="Fermer" className="text-ink-3 hover:text-ink">
-            ✕
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fermer"
+            className="rounded-lg p-1 text-ink-3 transition hover:bg-hover hover:text-ink"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
         {children}
@@ -178,7 +185,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   return (
     <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 className="text-xl font-semibold text-ink sm:text-2xl">{title}</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink sm:text-3xl">{title}</h1>
         {subtitle && <p className="mt-0.5 text-sm text-ink-3">{subtitle}</p>}
       </div>
       {action}

@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, statusLabels } from "../lib/api";
 import type { Client, Company, QuoteItem, QuoteStatus } from "../lib/types";
 import { addDays, fmt, money, round2, today } from "../lib/format";
-import { Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
+import { Button, Card, Field, LinkButton, PageHeader, Spinner, inputCls } from "../components/ui";
 import { fileToPhoto, MAX_PHOTOS } from "../lib/photos";
 import {
+  AlertCircle,
   AlignCenter,
   AlignLeft,
   AlignRight,
@@ -292,7 +293,7 @@ function addLine() {
             {editId && (
               <Link
                 to={`${listPath}/${editId}/view`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#f59e0b]/40 px-3 py-2 text-sm text-brand-2 hover:bg-brand-soft"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-brand-line px-3 py-2 text-sm text-brand-2 hover:bg-brand-soft"
               >
                 <Printer className="h-4 w-4" /> Aperçu / PDF
               </Link>
@@ -325,7 +326,15 @@ function addLine() {
       )}
 
       {!company ? (
-        <div className="flex justify-center py-20"><Spinner /></div>
+        error ? (
+          <Card className="flex flex-col items-center gap-2 py-10 text-center text-danger">
+            <AlertCircle className="h-6 w-6" />
+            <div>Impossible de charger l'éditeur : {error}</div>
+            <LinkButton to={listPath} variant="ghost">Retour à la liste</LinkButton>
+          </Card>
+        ) : (
+          <div className="flex justify-center py-20"><Spinner /></div>
+        )
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
@@ -395,7 +404,7 @@ function addLine() {
                       {!frozen && (
                         <button
                           type="button"
-                          className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-80 transition hover:bg-red-600/90 group-hover:opacity-100"
+                          className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-80 transition hover:bg-danger/90 group-hover:opacity-100"
                           title="Retirer cette photo"
                           onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
                         >
@@ -581,7 +590,7 @@ function addLine() {
               {editId && (
                 <Link
                   to={`${listPath}/${editId}/view`}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#f59e0b]/40 px-4 py-2 text-sm text-brand-2 hover:bg-brand-soft"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-line px-4 py-2 text-sm text-brand-2 hover:bg-brand-soft"
                 >
                   <Printer className="h-4 w-4" /> Aperçu / PDF
                 </Link>

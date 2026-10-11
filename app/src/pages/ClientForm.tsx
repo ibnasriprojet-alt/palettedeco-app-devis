@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../lib/api";
-import { Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
-import { ArrowLeft, Save } from "lucide-react";
+import { Button, Card, EmptyState, Field, LinkButton, PageHeader, Spinner, inputCls } from "../components/ui";
+import { ArrowLeft, Save, UserX } from "lucide-react";
 
 export default function ClientForm() {
   const { id } = useParams();
@@ -11,6 +11,7 @@ export default function ClientForm() {
 
   const [loading, setLoading] = useState(editId ? true : false);
   const [saving, setSaving] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     name: "",
@@ -29,7 +30,12 @@ export default function ClientForm() {
       .getClients()
       .then((list) => {
         const c = list.find((x) => x.id === editId);
-        if (c) setForm({ name: c.name, siret: c.siret, vat_number: c.vat_number || "", address: c.address, email: c.email, phone: c.phone, notes: c.notes, no_reminders: !!c.no_reminders });
+        if (c) {
+          setForm({ name: c.name, siret: c.siret, vat_number: c.vat_number || "", address: c.address, email: c.email, phone: c.phone, notes: c.notes, no_reminders: !!c.no_reminders });
+        } else {
+          setNotFound(true);
+          setError("");
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -65,6 +71,13 @@ export default function ClientForm() {
 
       {loading ? (
         <div className="flex justify-center py-20"><Spinner /></div>
+      ) : notFound ? (
+        <EmptyState
+          icon={<UserX className="h-8 w-8" />}
+          title="Client introuvable"
+          text="Ce client n'existe plus ou a été supprimé."
+          action={<LinkButton to="/clients" variant="ghost">Retour à la liste des clients</LinkButton>}
+        />
       ) : (
         <div className="max-w-2xl">
           <Card>

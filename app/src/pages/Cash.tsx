@@ -180,7 +180,7 @@ export default function Cash() {
               text="Saisissez vos virements entrants et sortants pour obtenir un solde fiable."
             />
           ) : (
-            <Card className="overflow-hidden">
+            <Card className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-4">

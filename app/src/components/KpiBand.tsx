@@ -201,7 +201,7 @@ export function KpiBand() {
         </Card2>
 
         <Card2>
-          <h3 className="mb-3 text-sm font-semibold">Meilleurs clients</h3>
+          <h3 className="mb-3 font-display text-base font-semibold">Meilleurs clients</h3>
           {(kpi?.top_clients || []).length === 0 ? (
             <p className="text-sm text-ink-4">
               {period === "30d" || period === "month"

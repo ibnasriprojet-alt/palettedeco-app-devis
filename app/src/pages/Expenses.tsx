@@ -102,7 +102,7 @@ export default function Expenses() {
           <div className="mt-3 space-y-2">
             {byCategory.map(([cat, val]) => (
               <div key={cat} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 truncate text-sm text-ink-3">{categoryLabel(cat)}</span>
+                <span className="w-32 shrink-0 truncate text-sm text-ink-3 sm:w-40">{categoryLabel(cat)}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-subtle">
                   <div
                     className="h-full rounded-full bg-brand-2"

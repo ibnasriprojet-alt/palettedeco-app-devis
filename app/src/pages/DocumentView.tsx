@@ -318,7 +318,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                 <div className="flex items-start gap-3">
                   <img src={company.logo || "/logo.png"} alt="logo" className="h-16 w-16 rounded-lg object-contain" />
                   <div>
-                    <div className="text-xl font-bold text-[#3c1f0c]">{company.name || "PaletteD&co"}</div>
+                    <div className="text-xl font-bold text-ink">{company.name || "PaletteD&co"}</div>
                     <div className="mt-1 text-xs leading-relaxed text-ink-4">
                       {company.owner_name && <div>Gérant : {company.owner_name}</div>}
                       {company.address && <div>{company.address}</div>}
@@ -330,7 +330,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`text-3xl font-extrabold tracking-tight ${isQuote ? "text-accent" : isOrder ? "text-accent" : "text-[#6b3512]"}`}>
+                  <div className={`font-display text-3xl font-extrabold tracking-tight ${isQuote ? "text-accent" : isOrder ? "text-accent" : "text-brand-2"}`}>
                     {isQuote ? "DEVIS" : isOrder ? "BON DE COMMANDE" : "FACTURE"}
                   </div>
                   <div className="text-base font-semibold text-ink-3">{doc.number}</div>
@@ -364,7 +364,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
               <div className="table-wrap print-break-avoid">
                 <table className="w-full border-collapse">
                   <thead>
-                    <tr className="bg-[#dddddd] text-left text-[11px] uppercase tracking-wide text-[#3c1f0c]">
+                    <tr className="bg-surface-3 text-left text-[11px] uppercase tracking-wide text-ink">
                     <th className="rounded-l-lg px-3 py-2 font-medium">Désignation</th>
                     <th className="px-3 py-2 text-right font-medium">Qté</th>
                     <th className="px-3 py-2 text-right font-medium">Prix HT</th>
@@ -382,7 +382,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   ) : (
                     doc.items.map((it, i) =>
                       it.is_block ? (
-                        <tr key={i} className="border-b border-stone-100">
+                        <tr key={i} className="border-b border-line">
                           <td colSpan={5} className="px-3 py-2.5 text-sm">
                             <span
                               className={cn(
@@ -390,7 +390,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                                 it.align === "center" ? "text-center" : it.align === "right" ? "text-right" : "",
                                 it.bold && "font-bold",
                                 it.italic && "italic",
-                                it.bold ? "text-stone-900" : "text-ink-3",
+                                it.bold ? "text-ink" : "text-ink-3",
                               )}
                             >
                               {it.description || "—"}
@@ -398,7 +398,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                           </td>
                         </tr>
                       ) : (
-                        <tr key={i} className="border-b border-stone-100">
+                        <tr key={i} className="border-b border-line">
                           <td
                             className={cn(
                               "whitespace-pre-line px-3 py-2.5 text-sm text-ink-2",
@@ -440,18 +440,18 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                     <span className="text-ink-4">TVA</span>
                     <span className="font-semibold text-ink-2">{fmt(doc.total_tva)}</span>
                   </div>
-                  <div className="flex justify-between rounded-lg bg-[#dddddd] px-3 py-2 text-[#3c1f0c]">
+                  <div className="flex justify-between rounded-lg bg-surface-3 px-3 py-2 text-ink">
                     <span className="font-semibold">Total TTC</span>
-                    <span className="text-base font-bold text-[#0f766e]">{fmt(doc.total_ttc)}</span>
+                    <span className="text-base font-bold text-accent">{fmt(doc.total_ttc)}</span>
                   </div>
                   {overall && overall.paid > 0 && (
                     <div className="space-y-1 pt-1">
-                      <div className="h-2 overflow-hidden rounded-full bg-stone-200">
-                        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${overall.pct}%` }} />
+                      <div className="h-2 overflow-hidden rounded-full bg-surface-3">
+                        <div className="h-full rounded-full bg-success" style={{ width: `${overall.pct}%` }} />
                       </div>
                       <div className="flex justify-between text-ink-4">
                         <span>Payé</span>
-                        <span className="font-semibold text-emerald-700">{fmt(overall.paid)}</span>
+                        <span className="font-semibold text-success">{fmt(overall.paid)}</span>
                       </div>
                       <div className="flex justify-between text-ink-4">
                         <span>Reste à payer</span>
@@ -514,7 +514,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                           value={invoiceNumber}
                           onChange={(e) => setInvoiceNumber(e.target.value)}
                         />
-                        <Button onClick={convert} disabled={converting} className="bg-[#f59e0b] text-[#1c130c] hover:bg-[#ea8c00]">
+                        <Button onClick={convert} disabled={converting} className="bg-brand-2 text-brand-ink hover:brightness-95">
                           <FileText className="h-4 w-4" /> {converting ? "Conversion..." : "Convertir en facture"}
                         </Button>
                       </div>
@@ -564,7 +564,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                 <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-ink-2">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 accent-[#14b8a6]"
+                    className="h-4 w-4 accent-[var(--accent)]"
                     checked={emailCopy}
                     onChange={(e) => setEmailCopy(e.target.checked)}
                   />

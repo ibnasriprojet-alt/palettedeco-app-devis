@@ -49,7 +49,7 @@ function CompanyName() {
   }, []);
   return (
     <div className="min-w-0">
-      <div className="truncate text-sm font-semibold leading-tight">{name || "PaletteD&co"}</div>
+      <div className="truncate font-display text-lg font-semibold leading-tight">{name || "PaletteD&co"}</div>
       <div className="text-[11px] text-brand-2">Devis & Factures</div>
     </div>
   );
@@ -209,7 +209,7 @@ export default function Layout() {
             </button>
             <div className="flex min-w-0 items-center gap-2.5 lg:hidden">
               <img src="/logo.png" alt="PaletteD&co" className="h-8 w-8 rounded-lg object-contain" />
-              <span className="truncate text-sm font-semibold">PaletteD&co</span>
+              <span className="truncate font-display text-base font-semibold">PaletteD&co</span>
             </div>
 
             <div className="ml-auto flex items-center gap-2">

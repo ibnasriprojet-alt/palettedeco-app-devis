@@ -85,44 +85,56 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Link to="/quotes">
-              <Card className="transition hover:border-[#14b8a6]/50">
-                <div className="flex items-center gap-2 text-ink-3"><Files className="h-5 w-5" /><span className="text-sm">Devis</span></div>
-                <div className="mt-2 text-lg font-semibold text-ink">{Number(stats?.quotes ?? 0)} <span className="text-sm font-normal text-ink-4">· {fmt(stats?.accepted_value ?? 0)} acceptés</span></div>
+            <Link to="/quotes" className="group">
+              <Card className="transition hover:border-accent/50 hover:bg-surface-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"><Files className="h-4 w-4" /></span>
+                  <span className="text-sm text-ink-3">Devis</span>
+                </div>
+                <div className="mt-2.5 text-lg font-semibold tabular-nums text-ink">{Number(stats?.quotes ?? 0)} <span className="text-sm font-normal text-ink-4">· {fmt(stats?.accepted_value ?? 0)} acceptés</span></div>
               </Card>
             </Link>
-            <Link to="/invoices">
-              <Card className="transition hover:border-[#14b8a6]/50">
-                <div className="flex items-center gap-2 text-ink-3"><ReceiptText className="h-5 w-5" /><span className="text-sm">Factures</span></div>
-                <div className="mt-2 text-lg font-semibold text-ink">{Number(stats?.invoices ?? 0)}</div>
+            <Link to="/invoices" className="group">
+              <Card className="transition hover:border-accent/50 hover:bg-surface-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"><ReceiptText className="h-4 w-4" /></span>
+                  <span className="text-sm text-ink-3">Factures</span>
+                </div>
+                <div className="mt-2.5 text-lg font-semibold tabular-nums text-ink">{Number(stats?.invoices ?? 0)}</div>
               </Card>
             </Link>
-            <Link to="/invoices">
-              <Card className="transition hover:border-[#14b8a6]/50">
-                <div className="flex items-center gap-2 text-ink-3"><HandCoins className="h-5 w-5" /><span className="text-sm">Encaissé</span></div>
-                <div className="mt-2 text-lg font-semibold text-success">{fmt(collected)}</div>
+            <Link to="/invoices" className="group">
+              <Card className="transition hover:border-accent/50 hover:bg-surface-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-soft text-success"><HandCoins className="h-4 w-4" /></span>
+                  <span className="text-sm text-ink-3">Encaissé</span>
+                </div>
+                <div className="mt-2.5 text-lg font-semibold tabular-nums text-success">{fmt(collected)}</div>
               </Card>
             </Link>
-            <Link to="/invoices">
-              <Card className="transition hover:border-[#14b8a6]/50">
-                <div className="flex items-center gap-2 text-ink-3"><Clock className="h-5 w-5" /><span className="text-sm">À encaisser</span></div>
-                <div className="mt-2 text-lg font-semibold text-brand-2">{fmt(outstanding)}</div>
+            <Link to="/invoices" className="group">
+              <Card className="transition hover:border-accent/50 hover:bg-surface-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand-2"><Clock className="h-4 w-4" /></span>
+                  <span className="text-sm text-ink-3">À encaisser</span>
+                </div>
+                <div className="mt-2.5 text-lg font-semibold tabular-nums text-brand-2">{fmt(outstanding)}</div>
               </Card>
             </Link>
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-3">
-            <Card className="!p-3">
+            <Card className="p-3">
               <div className="flex items-center gap-2 text-xs text-ink-3"><TrendingUp className="h-4 w-4" /> Facturé ce mois</div>
               <div className="mt-1 text-base font-semibold text-ink">{fmt(stats?.month_invoiced ?? 0)}</div>
               <div className="text-xs text-ink-4">{Number(stats?.month_count ?? 0)} facture(s)</div>
             </Card>
-            <Card className="!p-3">
+            <Card className="p-3">
               <div className="flex items-center gap-2 text-xs text-ink-3"><CheckCircle2 className="h-4 w-4" /> Devis acceptés</div>
               <div className="mt-1 text-base font-semibold text-ink">{fmt(stats?.accepted_value ?? 0)}</div>
               <div className="text-xs text-ink-4">Taux : {Math.round(Number(stats?.acceptance_rate ?? 0))}%</div>
             </Card>
-            <Card className="!p-3">
+            <Card className="p-3">
               <div className="flex items-center gap-2 text-xs text-ink-3"><Users className="h-4 w-4" /> Clients</div>
               <div className="mt-1 text-base font-semibold text-ink">{Number(stats?.clients ?? 0)}</div>
               <div className="text-xs text-ink-4">sociétés enregistrées</div>
@@ -131,7 +143,7 @@ export default function Dashboard() {
 
           {relances.length > 0 && (
             <Card className="mt-4 border-brand-line">
-              <h2 className="mb-1 flex items-center justify-between font-semibold text-ink">
+              <h2 className="mb-1 flex items-center justify-between font-display text-lg font-semibold text-ink">
                 <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-brand-2" /> À relancer</span>
                 <Link to="/invoices" className="text-sm font-normal text-accent hover:underline">Voir les factures</Link>
               </h2>
@@ -172,7 +184,7 @@ export default function Dashboard() {
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card>
-              <h2 className="mb-3 flex items-center justify-between font-semibold text-ink">
+              <h2 className="mb-3 flex items-center justify-between font-display text-lg font-semibold text-ink">
                 Devis récents
                 <Link to="/quotes" className="flex items-center text-sm font-normal text-accent hover:underline">Tout voir <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
               </h2>
@@ -201,7 +213,7 @@ export default function Dashboard() {
             </Card>
 
             <Card>
-              <h2 className="mb-3 flex items-center justify-between font-semibold text-ink">
+              <h2 className="mb-3 flex items-center justify-between font-display text-lg font-semibold text-ink">
                 Factures récentes
                 <Link to="/invoices" className="flex items-center text-sm font-normal text-accent hover:underline">Tout voir <ArrowRight className="ml-1 h-3.5 w-3.5" /></Link>
               </h2>
@@ -242,7 +254,7 @@ export default function Dashboard() {
 
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <Card>
-              <h2 className="mb-3 font-semibold text-ink">Statuts des devis</h2>
+              <h2 className="mb-3 font-display text-lg font-semibold text-ink">Statuts des devis</h2>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                 {quoteStatuses.map((s) => (
                   <div key={s}>
@@ -253,7 +265,7 @@ export default function Dashboard() {
                     <div className="h-2 overflow-hidden rounded-full bg-hover">
                       <div className="h-full rounded-full" style={{
                         width: `${Math.min(100, ((Number(stats?.[s as keyof StatsType]) || 0) / Math.max(1, Number(stats?.quotes) || 1)) * 100)}%`,
-                        background: "#14b8a6",
+                        background: "var(--accent)",
                       }} />
                     </div>
                   </div>
@@ -262,7 +274,7 @@ export default function Dashboard() {
             </Card>
 
             <Card>
-              <h2 className="mb-3 font-semibold text-ink">Encaissements</h2>
+              <h2 className="mb-3 font-display text-lg font-semibold text-ink">Encaissements</h2>
               <div className="space-y-3">
                 <div className="flex justify-between text-sm"><span className="text-ink-3">Total facturé</span><span className="font-medium text-ink">{fmt(stats?.invoices_total ?? 0)}</span></div>
                 <div className="h-2 overflow-hidden rounded-full bg-hover">

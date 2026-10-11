@@ -157,7 +157,11 @@ export default function PublicAccept() {
                 <X className="h-4 w-4" /> {error}
               </div>
             </Card>
-          ) : null
+          ) : (
+            <Card className="text-center text-ink-3">
+              Devis indisponible. Vérifiez le lien reçu par e-mail.
+            </Card>
+          )
         ) : (
           <Card>
             <div className="flex items-start justify-between gap-3">

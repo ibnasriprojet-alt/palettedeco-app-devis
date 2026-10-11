@@ -301,7 +301,7 @@ export default function Settings() {
                 }} />
               <button
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-line-2 p-5 text-ink-3 hover:border-[#14b8a6]/50 hover:text-ink"
+                className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-line-2 p-5 text-ink-3 hover:border-accent/50 hover:text-ink"
               >
                 {company.logo ? (
                   <img src={company.logo} alt="Logo" className="max-h-28 object-contain" />

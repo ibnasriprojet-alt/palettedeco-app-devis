@@ -87,7 +87,7 @@ export default function Orders() {
             className={cn(
               "shrink-0 rounded-full border px-3 py-1.5 text-sm transition",
               status === f.value
-                ? "border-[#14b8a6] bg-accent/15 text-accent"
+                ? "border-accent/60 bg-accent/15 text-accent"
                 : "border-line text-ink-2 hover:bg-hover",
             )}
           >

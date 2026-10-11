@@ -219,7 +219,7 @@ export default function Relances() {
                 <th className="hidden px-4 py-3 md:table-cell">Client</th>
                 <th className="px-4 py-3">Retard</th>
                 <th className="px-4 py-3 text-right">Reste dû</th>
-                <th className="px-4 py-3">Prochaine étape</th>
+                <th className="hidden px-4 py-3 md:table-cell">Prochaine étape</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -282,7 +282,7 @@ export default function Relances() {
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold tabular-nums">{eur(t.reste)}</td>
-                  <td className="px-4 py-2.5">
+                  <td className="hidden px-4 py-2.5 md:table-cell">
                     {t.relance_pausee ? (
                       <Badge className="border-brand-line bg-brand-soft text-brand-2">
                         <Pause className="mr-1 inline h-3 w-3" /> relance en pause
