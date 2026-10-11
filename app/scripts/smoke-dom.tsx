@@ -264,7 +264,7 @@ ok("relance historisee", has("redirige test") || has("redirigé test"));
 ok("facture en pause listee", has("FACT-2026-006") && has("relance en pause"));
 ok("facture en pause non actionnable", has("Reprendre"));
 ok("client exclu des relances", has("FACT-2026-007") && has("relances coupées"));
-ok("option plus de relance proposee", has("plus de relance"));
+ok("lien vers la fiche client pour gerer les relances", has("gérer dans la fiche client"));
 ok("aucun NaN", !has("NaN"));
 
 console.log("\n=== Bandeau KPI ===");

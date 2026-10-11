@@ -106,17 +106,6 @@ export default function Relances() {
     }
   };
 
-  const toggleClientPause = async (clientId: number | null, paused: boolean) => {
-    if (clientId == null) return;
-    setError("");
-    try {
-      await api.setClientNoReminders(clientId, paused);
-      load();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-
   return (
     <>
       <PageHeader
@@ -212,7 +201,7 @@ export default function Relances() {
             </div>
           )}
 
-          <Card className="overflow-hidden">
+          <Card className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-4">
@@ -268,18 +257,12 @@ export default function Relances() {
                           {actionnables.filter((i) => i.client_id === t.client_id).every((i) => selected.has(i.id)) ? "désélectionner" : "tout"}
                         </button>
                       )}
-                      {t.client_sans_relance ? (
-                        <Badge className="border-danger-line bg-danger-soft text-danger">
-                          <Ban className="mr-1 inline h-3 w-3" /> relances coupées
-                        </Badge>
-                      ) : (
-                        <button
-                          onClick={() => toggleClientPause(t.client_id, true)}
-                          className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium text-ink-3 transition hover:bg-hover"
-                          title="Ne plus jamais relancer ce client"
-                        >
-                          <Ban className="mr-0.5 inline h-3 w-3" /> plus de relance
-                        </button>
+                      {t.client_sans_relance && t.client_id != null && (
+                        <Link to={`/clients/${t.client_id}`} title="Gérer les relances dans la fiche client">
+                          <Badge className="border-danger-line bg-danger-soft text-danger">
+                            <Ban className="mr-1 inline h-3 w-3" /> relances coupées
+                          </Badge>
+                        </Link>
                       )}
                     </div>
                     <div className="truncate text-xs text-ink-4">{t.email || "aucun e-mail"}</div>
@@ -314,7 +297,7 @@ export default function Relances() {
                   </td>
                   <td className="px-4 py-2.5 text-right">
                     {t.actionnable ? (
-                      <div className="flex justify-end gap-1.5">
+                      <div className="flex flex-wrap justify-end gap-1.5">
                         <button
                           onClick={() => openPreview(t)}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
@@ -335,35 +318,23 @@ export default function Relances() {
                           <Pause className="h-3.5 w-3.5" /> Pause
                         </button>
                       </div>
+                    ) : t.relance_pausee ? (
+                      <button
+                        onClick={() => togglePause(t, false)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
+                        title="Reprendre les relances pour cette facture"
+                      >
+                        <Play className="h-3.5 w-3.5" /> Reprendre
+                      </button>
+                    ) : t.client_sans_relance && t.client_id != null ? (
+                      <Link
+                        to={`/clients/${t.client_id}`}
+                        className="text-xs text-ink-3 underline underline-offset-2 transition hover:text-accent"
+                      >
+                        gérer dans la fiche client
+                      </Link>
                     ) : (
-                      <div className="flex justify-end gap-1.5">
-                        <button
-                          onClick={() => openPreview(t)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
-                          disabled={!t.niveau_suivant}
-                          title={t.niveau_suivant ? "Aperçu du prochain palier" : "Paliers épuisés"}
-                        >
-                          <Eye className="h-3.5 w-3.5" /> Aperçu
-                        </button>
-                        <button
-                          onClick={() => togglePause(t, false)}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
-                          disabled={!t.relance_pausee}
-                          title="Reprendre les relances pour cette facture"
-                        >
-                          <Play className="h-3.5 w-3.5" /> Reprendre
-                        </button>
-                        {t.client_sans_relance && (
-                          <button
-                            onClick={() => toggleClientPause(t.client_id, false)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-3 transition hover:bg-hover"
-                            title="Réactiver les relances pour ce client"
-                          >
-                            <Play className="h-3.5 w-3.5" /> Relancer ce client
-                          </button>
-                        )}
-                        <span className="text-xs text-ink-4">—</span>
-                      </div>
+                      <span className="text-xs text-ink-4">—</span>
                     )}
                   </td>
                 </tr>

@@ -90,12 +90,26 @@ export default function ClientForm() {
               <Field label="Notes" className="sm:col-span-2">
                 <textarea rows={2} className={inputCls} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Notes internes (remises, récurrence...)" />
               </Field>
-              <div className="sm:col-span-2 flex items-center gap-2">
-                <input id="no_reminders" type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={form.no_reminders} onChange={(e) => set("no_reminders", e.target.checked)} />
-                <label htmlFor="no_reminders" className="text-sm text-ink-3">
-                  Ne pas relancer ce client (enregistrer pour appliquer sur toutes ses factures impayées)
-                </label>
-              </div>
+              <label
+                htmlFor="no_reminders"
+                className="sm:col-span-2 flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-subtle p-3"
+              >
+                <input
+                  id="no_reminders"
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                  checked={!form.no_reminders}
+                  onChange={(e) => set("no_reminders", !e.target.checked)}
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-ink">Relances automatiques</span>
+                  <span className="block text-xs text-ink-4">
+                    {form.no_reminders
+                      ? "Désactivées : ce client est retiré du centre de relances (toutes ses factures impayées)."
+                      : "Activées : ce client apparaît dans le centre de relances pour ses factures impayées."}
+                  </span>
+                </span>
+              </label>
             </div>
             {error && <div className="mt-3 text-sm text-danger">{error}</div>}
             <div className="mt-4 flex gap-2">
