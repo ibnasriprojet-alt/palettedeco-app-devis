@@ -117,7 +117,7 @@ export default function Cash() {
                   <div className="min-w-0">
                     <div className="truncate text-sm font-medium">{a.name}</div>
                     <div className="truncate text-xs text-ink-4">
-                      {a.iban ? a.iban : a.bank_name || "IBAN non renseigné"}
+                      {a.iban ? a.iban : a.bank_name || "—"}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -355,12 +355,20 @@ function AccountForm({ account, onClose, onSaved }: { account?: BankAccount; onC
             />
           </Field>
         </div>
-        <Field label="IBAN">
-          <input className={cn(inputCls, "font-mono")} value={f.iban} onChange={(e) => setF({ ...f, iban: e.target.value })} placeholder="FR76 0000 0000 0000 0000 0000 000" />
-        </Field>
-        <Field label="BIC">
-          <input className={cn(inputCls, "font-mono")} value={f.bic} onChange={(e) => setF({ ...f, bic: e.target.value })} />
-        </Field>
+        <div className="rounded-lg border border-line bg-subtle p-3">
+          <div className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-4">Coordonnées bancaires — facultatif</div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="IBAN (facultatif)">
+              <input className={cn(inputCls, "font-mono")} value={f.iban} onChange={(e) => setF({ ...f, iban: e.target.value })} placeholder="FR76 0000 0000 0000 0000 0000 000" />
+            </Field>
+            <Field label="BIC (facultatif)">
+              <input className={cn(inputCls, "font-mono")} value={f.bic} onChange={(e) => setF({ ...f, bic: e.target.value })} />
+            </Field>
+          </div>
+          <p className="mt-2 text-xs text-ink-4">
+            Sert seulement à repérer le compte (4 derniers chiffres dans les listes). Le RIB affiché sur vos devis et factures se règle dans Réglages → Société.
+          </p>
+        </div>
         <label className="flex items-center gap-2 text-sm text-ink-2">
           <input type="checkbox" checked={f.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked })} className="h-4 w-4 rounded border-line bg-surface-2" />
           Compte principal
