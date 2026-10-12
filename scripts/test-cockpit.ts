@@ -506,6 +506,18 @@ const unsign = await call("POST", `/api/quotes/${vaId}/signature`, { signed: fal
 check("signature retiree", unsign.status === 200 && unsign.json?.signed === false && (unsign.json?.signed_by || []).length === 0);
 check("signature sur devis inexistant -> 404", (await call("POST", "/api/quotes/999999/signature", { signed: true })).status === 404);
 
+console.log("\n=== 10. Numerotation des devis ===");
+{
+  const numYear = new Date().getFullYear();
+  const mkNum = (d: string) => ({ status: "draft", items: [{ description: d, quantity: 1, unit_price: 1, tva_rate: 0 }] });
+  const numA = await call("POST", "/api/quotes", mkNum("Numero test A"));
+  check("numero auto au format DEV-<annee>-<n>", new RegExp(`^DEV-${numYear}-\\d+$`).test(String(numA.json?.number || "")), numA.json?.number);
+  if (numA.json?.id > 0) await call("DELETE", `/api/quotes/${numA.json.id}`);
+  const numB = await call("POST", "/api/quotes", mkNum("Numero test B"));
+  if (numB.json?.id > 0) createdQuoteIds.push(numB.json.id);
+  check("devis supprime : numero reattribue (pas de trou)", numB.json?.number === numA.json?.number, `${numB.json?.number} vs ${numA.json?.number}`);
+}
+
 /* Nettoyage : une seule passe, par identifiant, sur la base de dev.
    Les factures finalisees sont effacees en SQL car l'API les protege.
    Les reglages societe sont restaures : sans cela le test laissait a demeure
