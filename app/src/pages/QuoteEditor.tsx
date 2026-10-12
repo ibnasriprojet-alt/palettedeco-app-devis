@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, statusLabels } from "../lib/api";
-import type { Client, Company, Quote, QuoteItem, QuoteStatus, SignedBy } from "../lib/types";
+import type { Client, Company, Quote, QuoteGroup, QuoteItem, QuoteStatus, SignedBy } from "../lib/types";
 import { addDays, fmt, money, round2, today } from "../lib/format";
 import { Button, Card, Field, LinkButton, PageHeader, Spinner, inputCls } from "../components/ui";
 import SignatureCard from "../components/SignatureCard";
@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   ArrowUp,
   Bold,
+  Copy,
   ImagePlus,
   Italic,
   Plus,
@@ -58,6 +59,11 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
   const [signedAt, setSignedAt] = useState<string | null>(null);
   const [signedBy, setSignedBy] = useState<SignedBy[]>([]);
   const [signatureMention, setSignatureMention] = useState("");
+
+  const [groups, setGroups] = useState<QuoteGroup[]>([]);
+  const [groupSel, setGroupSel] = useState<string>("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [duplicating, setDuplicating] = useState(false);
 
   const [autoState, setAutoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [autoError, setAutoError] = useState("");
@@ -113,6 +119,8 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
             setSignedAt(qq.signed_at || null);
             setSignedBy(Array.isArray(qq.signed_by) ? qq.signed_by : []);
             setSignatureMention(qq.signature_mention || "");
+            setGroupSel(qq.group_id ? String(qq.group_id) : "");
+            setNewGroupName("");
           }
           setError("");
           hydratedRef.current = true;
@@ -135,6 +143,8 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
         setSignedAt(null);
         setSignedBy([]);
         setSignatureMention("");
+        setGroupSel("");
+        setNewGroupName("");
         setError("");
         hydratedRef.current = true;
       }
@@ -142,6 +152,11 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, isQuote]);
+
+  useEffect(() => {
+    if (!isQuote) return;
+    api.getQuoteGroups().then(setGroups).catch(() => {});
+  }, [isQuote]);
 
   const totals = useMemo(() => {
     let ht = 0;
@@ -232,6 +247,14 @@ function addLine() {
         is_block: !!it.is_block,
       })),
       photos,
+      ...(isQuote
+        ? {
+            group_id:
+              groupSel === "__new__" ? undefined : groupSel ? Number(groupSel) : null,
+            group_name:
+              groupSel === "__new__" && newGroupName.trim() ? newGroupName.trim() : undefined,
+          }
+        : {}),
     };
   }
 
@@ -274,7 +297,7 @@ function addLine() {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, isQuote]);
+  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, isQuote, groupSel, newGroupName]);
 
   async function save(nextStatus?: QuoteStatus) {
     setSaving(true);
@@ -290,6 +313,11 @@ function addLine() {
           ? await api.createQuote(payload)
           : await api.createOrder(payload);
       setSyncedInvoice((q as { synced_invoice_id?: number | null }).synced_invoice_id ?? null);
+      if (isQuote && (q as Quote).group_id) {
+        setGroupSel(String((q as Quote).group_id));
+        setNewGroupName("");
+        api.getQuoteGroups().then(setGroups).catch(() => {});
+      }
       navigate(`${listPath}/${q.id}`, { replace: true });
     } catch (e) {
       setError((e as Error).message);
@@ -393,6 +421,41 @@ function addLine() {
                 <Field label={isQuote ? "Date de validité" : "Date de livraison prévue"}>
                   <input type="date" className={inputCls} value={validUntil} disabled={frozen} onChange={(e) => setValidUntil(e.target.value)} />
                 </Field>
+                {isQuote && (
+                  <div className="sm:col-span-2">
+                    <Field label="Dossier (variantes du même produit)">
+                      <select
+                        className={inputCls}
+                        value={groupSel}
+                        disabled={frozen}
+                        onChange={(e) => setGroupSel(e.target.value)}
+                      >
+                        <option value="">— Aucun dossier —</option>
+                        {groups.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.name}
+                            {g.client?.name ? ` — ${g.client.name}` : ""}
+                            {g.status === "chosen" ? " ✓" : ""}
+                          </option>
+                        ))}
+                        <option value="__new__">+ Nouveau dossier…</option>
+                      </select>
+                    </Field>
+                    {groupSel === "__new__" && (
+                      <input
+                        className={cn(inputCls, "mt-2")}
+                        placeholder="Nom du dossier (ex : Salon sur-mesure — M. Dupont)"
+                        value={newGroupName}
+                        disabled={frozen}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                      />
+                    )}
+                    <p className="mt-2 text-xs text-ink-4">
+                      Regroupez ici les 2-3 variantes d'un même produit. Depuis la liste des devis, désignez la variante
+                      choisie par le client : les autres passeront en « refusé ».
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>
 
@@ -625,6 +688,27 @@ function addLine() {
                 >
                   <Printer className="h-4 w-4" /> Aperçu / PDF
                 </Link>
+              )}
+              {isQuote && editId && !frozen && (
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  disabled={duplicating}
+                  onClick={async () => {
+                    if (duplicating) return;
+                    setDuplicating(true);
+                    setError("");
+                    try {
+                      const dup = await api.duplicateQuote(editId);
+                      navigate(`/quotes/${dup.id}`);
+                    } catch (e) {
+                      setError((e as Error).message);
+                      setDuplicating(false);
+                    }
+                  }}
+                >
+                  <Copy className="h-4 w-4" /> {duplicating ? "Duplication..." : "Dupliquer (nouvelle variante)"}
+                </Button>
               )}
               {editId && !frozen && !invoiced && (
                 <Button

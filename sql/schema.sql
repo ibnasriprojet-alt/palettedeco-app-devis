@@ -188,3 +188,20 @@ ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed BOOLEAN NOT NULL DEFAULT fals
 ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ;
 ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed_by JSONB NOT NULL DEFAULT '[]';
 ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signature_mention TEXT DEFAULT '';
+
+-- Dossiers de devis : variantes d'un meme produit/projet pour un client.
+CREATE TABLE IF NOT EXISTS quote_groups (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  client_id INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+  notes TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','chosen')),
+  chosen_quote_id INTEGER REFERENCES quotes(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES quote_groups(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_quotes_group ON quotes(group_id);
+CREATE INDEX IF NOT EXISTS idx_quote_groups_client ON quote_groups(client_id);

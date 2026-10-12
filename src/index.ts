@@ -846,7 +846,12 @@ app.get("/api/clients/:id/history", async (c) => {
 });
 
 async function getQuote(id) {
-  const { rows } = await pool.query("SELECT * FROM quotes WHERE id = $1", [id]);
+  const { rows } = await pool.query(
+    `SELECT q.*, g.name AS group_name, g.status AS group_status
+       FROM quotes q LEFT JOIN quote_groups g ON g.id = q.group_id
+      WHERE q.id = $1`,
+    [id],
+  );
   if (!rows[0]) return null;
   const q = rows[0];
   const items = (
@@ -885,13 +890,36 @@ async function getDoc(type, id) {
   return getQuote(id);
 }
 
+/* Determine le dossier d'un devis : par identifiant existant, ou par nom
+   (cree le dossier au besoin pour ce client). Retourne null si aucun. */
+async function resolveGroupId(client, groupId, groupName, quoteClientId) {
+  const name = String(groupName || "").trim();
+  if (name) {
+    const found = await client.query(
+      "SELECT id FROM quote_groups WHERE lower(name) = lower($1) AND client_id IS NOT DISTINCT FROM $2 LIMIT 1",
+      [name, quoteClientId || null],
+    );
+    if (found.rows[0]) return found.rows[0].id;
+    const created = await client.query(
+      "INSERT INTO quote_groups (name, client_id) VALUES ($1,$2) RETURNING id",
+      [name, quoteClientId || null],
+    );
+    return created.rows[0].id;
+  }
+  const gid = Number(groupId);
+  if (!Number.isFinite(gid) || gid <= 0) return null;
+  const g = await client.query("SELECT id FROM quote_groups WHERE id = $1", [gid]);
+  return g.rows[0] ? g.rows[0].id : null;
+}
+
 app.get("/api/quotes", async (c) => {
   const status = c.req.query("status");
   const params = [];
   let sql =
-    "SELECT q.*, " +
+    "SELECT q.*, g.name AS group_name, g.status AS group_status, " +
     "json_build_object('id', cl.id, 'name', cl.name, 'email', cl.email, 'phone', cl.phone, 'address', cl.address, 'vat_number', cl.vat_number) AS client " +
-    "FROM quotes q LEFT JOIN clients cl ON cl.id = q.client_id";
+    "FROM quotes q LEFT JOIN clients cl ON cl.id = q.client_id " +
+    "LEFT JOIN quote_groups g ON g.id = q.group_id";
   if (status) {
     params.push(status);
     sql += ` WHERE q.status = $1`;
@@ -929,9 +957,10 @@ app.post("/api/quotes", async (c) => {
     const items = (b.items || []).map(itemProps);
     const totals = computeTotals(items);
     const photos = normalizePhotos(b.photos);
+    const groupId = await resolveGroupId(client, b.group_id, b.group_name, b.client_id || null);
     const { rows } = await client.query(
-      `INSERT INTO quotes (number, client_id, status, issue_date, valid_until, conditions, notes, total_ht, total_tva, total_ttc, photos)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) RETURNING *`,
+      `INSERT INTO quotes (number, client_id, status, issue_date, valid_until, conditions, notes, total_ht, total_tva, total_ttc, photos, group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12) RETURNING *`,
       [
         number,
         b.client_id || null,
@@ -944,6 +973,7 @@ app.post("/api/quotes", async (c) => {
         totals.total_tva,
         totals.total_ttc,
         JSON.stringify(photos),
+        groupId,
       ],
     );
     const q = rows[0];
@@ -972,7 +1002,7 @@ app.put("/api/quotes/:id", async (c) => {
   await client.connect();
   try {
     await client.query("BEGIN");
-    const cur = (await client.query("SELECT number, client_id, status, issue_date, valid_until, conditions, notes FROM quotes WHERE id = $1", [id])).rows[0];
+    const cur = (await client.query("SELECT number, client_id, status, issue_date, valid_until, conditions, notes, group_id FROM quotes WHERE id = $1", [id])).rows[0];
     if (!cur) {
       await client.query("ROLLBACK");
       await client.end();
@@ -988,12 +1018,20 @@ app.put("/api/quotes/:id", async (c) => {
     const items = (b.items || []).map(itemProps);
     const totals = computeTotals(items);
     const photos = normalizePhotos(b.photos);
+    const nextClientId = b.client_id === undefined ? cur.client_id : b.client_id;
+    /* b.group_id === null vide le dossier ; absent = conserve ; sinon on resout. */
+    let groupId = cur.group_id;
+    if (b.group_name !== undefined && String(b.group_name || "").trim() !== "") {
+      groupId = await resolveGroupId(client, null, b.group_name, nextClientId);
+    } else if (b.group_id !== undefined) {
+      groupId = await resolveGroupId(client, b.group_id, null, nextClientId);
+    }
     const { rows } = await client.query(
       `UPDATE quotes SET client_id=$1, status=$2, issue_date=$3, valid_until=$4,
-        conditions=$5, notes=$6, total_ht=$7, total_tva=$8, total_ttc=$9, number=$10, photos=$11::jsonb, updated_at=now()
+        conditions=$5, notes=$6, total_ht=$7, total_tva=$8, total_ttc=$9, number=$10, photos=$11::jsonb, group_id=$13, updated_at=now()
        WHERE id=$12 RETURNING *`,
       [
-        b.client_id === undefined ? cur.client_id : b.client_id,
+        nextClientId,
         b.status === undefined ? cur.status : b.status,
         b.issue_date || cur.issue_date,
         b.valid_until || defaultValidFrom(b.issue_date || cur.issue_date),
@@ -1005,6 +1043,7 @@ app.put("/api/quotes/:id", async (c) => {
         number,
         JSON.stringify(photos),
         id,
+        groupId,
       ],
     );
     if (!rows[0]) {
@@ -1093,6 +1132,181 @@ app.delete("/api/quotes/:id", async (c) => {
   const id = Number(c.req.param("id"));
   await pool.query("DELETE FROM quotes WHERE id = $1", [id]);
   return c.json({ ok: true });
+});
+
+/* ---------- Dossiers de devis (variantes d'un meme produit) ---------- */
+
+app.get("/api/quote-groups", async (c) => {
+  const { rows } = await pool.query(
+    `SELECT g.*, json_build_object('id', cl.id, 'name', cl.name) AS client,
+            (SELECT count(*) FROM quotes q WHERE q.group_id = g.id) AS quote_count
+       FROM quote_groups g LEFT JOIN clients cl ON cl.id = g.client_id
+      ORDER BY g.id DESC`,
+  );
+  return c.json(rows);
+});
+
+app.post("/api/quote-groups", async (c) => {
+  const b = await c.req.json().catch(() => ({}));
+  const name = String(b.name || "").trim();
+  if (!name) return c.json({ error: "Nom du dossier obligatoire" }, 400);
+  const { rows } = await pool.query(
+    "INSERT INTO quote_groups (name, client_id, notes) VALUES ($1,$2,$3) RETURNING *",
+    [name, b.client_id || null, b.notes || ""],
+  );
+  return c.json(rows[0], 201);
+});
+
+app.get("/api/quote-groups/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const g = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  if (!g) return c.json({ error: "Dossier introuvable" }, 404);
+  const quotes = (
+    await pool.query(
+      `SELECT q.*, g.name AS group_name, g.status AS group_status
+         FROM quotes q LEFT JOIN quote_groups g ON g.id = q.group_id
+        WHERE q.group_id = $1 ORDER BY q.id DESC`,
+      [id],
+    )
+  ).rows;
+  return c.json({ ...g, quotes });
+});
+
+app.put("/api/quote-groups/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json().catch(() => ({}));
+  const cur = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  if (!cur) return c.json({ error: "Dossier introuvable" }, 404);
+  const name = b.name === undefined ? cur.name : String(b.name).trim();
+  if (!name) return c.json({ error: "Nom du dossier obligatoire" }, 400);
+  const { rows } = await pool.query(
+    "UPDATE quote_groups SET name=$1, client_id=$2, notes=$3, updated_at=now() WHERE id=$4 RETURNING *",
+    [name, b.client_id === undefined ? cur.client_id : b.client_id || null, b.notes === undefined ? cur.notes : b.notes, id],
+  );
+  return c.json(rows[0]);
+});
+
+app.delete("/api/quote-groups/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  /* On detache les devis : ils redeviennent autonomes, aucune donnee perdue. */
+  await pool.query("UPDATE quotes SET group_id = NULL WHERE group_id = $1", [id]);
+  await pool.query("DELETE FROM quote_groups WHERE id = $1", [id]);
+  return c.json({ ok: true });
+});
+
+/* Rattacher un devis a un dossier (meme client). */
+app.post("/api/quote-groups/:id/quotes", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json().catch(() => ({}));
+  const quoteId = Number(b.quote_id);
+  const g = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  if (!g) return c.json({ error: "Dossier introuvable" }, 404);
+  const q = (await pool.query("SELECT id, client_id FROM quotes WHERE id = $1", [quoteId])).rows[0];
+  if (!q) return c.json({ error: "Devis introuvable" }, 404);
+  if (g.client_id && q.client_id && g.client_id !== q.client_id) {
+    return c.json({ error: "Le devis et le dossier n'ont pas le même client." }, 400);
+  }
+  if (!g.client_id) await pool.query("UPDATE quote_groups SET client_id = $1 WHERE id = $2", [q.client_id, id]);
+  await pool.query("UPDATE quotes SET group_id = $1, updated_at = now() WHERE id = $2", [id, quoteId]);
+  return c.json(await getQuote(quoteId));
+});
+
+/* Detacher un devis d'un dossier. */
+app.delete("/api/quote-groups/:id/quotes/:quoteId", async (c) => {
+  const id = Number(c.req.param("id"));
+  const quoteId = Number(c.req.param("quoteId"));
+  await pool.query("UPDATE quotes SET group_id = NULL, updated_at = now() WHERE id = $1 AND group_id = $2", [quoteId, id]);
+  return c.json({ ok: true });
+});
+
+/* Le client a choisi une variante : elle est acceptee, les autres refusees,
+   et le dossier passe a « choisi ». */
+app.post("/api/quote-groups/:id/choose", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json().catch(() => ({}));
+  const quoteId = Number(b.quote_id);
+  const g = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  if (!g) return c.json({ error: "Dossier introuvable" }, 404);
+  const q = (await pool.query("SELECT id, status FROM quotes WHERE id = $1 AND group_id = $2", [quoteId, id])).rows[0];
+  if (!q) return c.json({ error: "Ce devis n'appartient pas au dossier." }, 400);
+  if (q.status === "invoiced") return c.json({ error: "Ce devis est déjà facturé." }, 409);
+  const pgClient = new Client({ connectionString: process.env.DATABASE_URL_UNPOOLED });
+  await pgClient.connect();
+  try {
+    await pgClient.query("BEGIN");
+    await pgClient.query(
+      "UPDATE quotes SET status='accepted', updated_at=now() WHERE id = $1",
+      [quoteId],
+    );
+    await pgClient.query(
+      "UPDATE quotes SET status='declined', updated_at=now() WHERE group_id = $1 AND id <> $2 AND status IN ('draft','sent')",
+      [id, quoteId],
+    );
+    await pgClient.query(
+      "UPDATE quote_groups SET status='chosen', chosen_quote_id=$1, updated_at=now() WHERE id=$2",
+      [quoteId, id],
+    );
+    await pgClient.query("COMMIT");
+  } catch (e) {
+    await pgClient.query("ROLLBACK");
+    throw e;
+  } finally {
+    await pgClient.end();
+  }
+  const group = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  const quotes = (await pool.query("SELECT id, number, status FROM quotes WHERE group_id = $1 ORDER BY id", [id])).rows;
+  return c.json({ ...group, quotes });
+});
+
+/* Dupliquer un devis : memes lignes et photos, nouveau numero, brouillon.
+   Sert a creer rapidement les variantes d'un meme produit. */
+app.post("/api/quotes/:id/duplicate", async (c) => {
+  const id = Number(c.req.param("id"));
+  const src = (await pool.query("SELECT * FROM quotes WHERE id = $1", [id])).rows[0];
+  if (!src) return c.json({ error: "Devis introuvable" }, 404);
+  const items = (
+    await pool.query("SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY position, id", [id])
+  ).rows;
+  const client = new Client({ connectionString: process.env.DATABASE_URL_UNPOOLED });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    const year = new Date().getFullYear();
+    const number = await autoNext(client, "quotes", "dev", year);
+    const { rows } = await client.query(
+      `INSERT INTO quotes (number, client_id, status, issue_date, valid_until, conditions, notes, total_ht, total_tva, total_ttc, photos, group_id)
+       VALUES ($1,$2,'draft',$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11) RETURNING *`,
+      [
+        number,
+        src.client_id,
+        new Date().toISOString().slice(0, 10),
+        defaultValidFrom(new Date().toISOString().slice(0, 10)),
+        src.conditions || "",
+        src.notes || "",
+        src.total_ht,
+        src.total_tva,
+        src.total_ttc,
+        JSON.stringify(normalizePhotos(src.photos)),
+        src.group_id,
+      ],
+    );
+    const q = rows[0];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      await client.query(
+        `INSERT INTO quote_items (quote_id, position, description, quantity, unit_price, tva_rate, align, bold, italic, is_block)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [q.id, i, it.description, it.quantity, it.unit_price, it.tva_rate, it.align, !!it.bold, !!it.italic, !!it.is_block],
+      );
+    }
+    await client.query("COMMIT");
+    return c.json(await getQuote(q.id), 201);
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    await client.end();
+  }
 });
 
 app.get("/api/orders", async (c) => {

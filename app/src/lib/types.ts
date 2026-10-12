@@ -72,6 +72,8 @@ export interface DocPayload {
   notes: string;
   items: QuoteItem[];
   photos?: string[];
+  group_id?: number | null;
+  group_name?: string;
 }
 
 export interface Quote {
@@ -94,6 +96,23 @@ export interface Quote {
   signed_at?: string | null;
   signed_by?: SignedBy[];
   signature_mention?: string;
+  group_id?: number | null;
+  group_name?: string | null;
+  group_status?: "open" | "chosen" | null;
+}
+
+export interface QuoteGroup {
+  id: number;
+  name: string;
+  client_id: number | null;
+  notes: string;
+  status: "open" | "chosen";
+  chosen_quote_id: number | null;
+  created_at?: string;
+  updated_at?: string;
+  client?: { id: number; name: string } | null;
+  quote_count?: number;
+  quotes?: Quote[];
 }
 
 export interface Signatory {

@@ -58,6 +58,7 @@ const createdInvoiceIds: number[] = [];
 const createdQuoteIds: number[] = [];
 const createdClientIds: number[] = [];
 const createdSignatoryIds: number[] = [];
+const createdGroupIds: number[] = [];
 
 console.log("\n=== 1. Reglages et mode e-mail ===");
 /* Le mode en base depend de l'utilisateur (il peut passer en mode Reel dans
@@ -518,6 +519,36 @@ console.log("\n=== 10. Numerotation des devis ===");
   check("devis supprime : numero reattribue (pas de trou)", numB.json?.number === numA.json?.number, `${numB.json?.number} vs ${numA.json?.number}`);
 }
 
+console.log("\n=== 11. Dossiers de devis ===");
+const dgClient = await call("POST", "/api/clients", { name: "Client Dossier Test" });
+if (dgClient.json?.id > 0) createdClientIds.push(dgClient.json.id);
+const dg1 = await call("POST", "/api/quotes", {
+  client_id: dgClient.json?.id, status: "draft", group_name: "Dossier Test Produit",
+  items: [{ description: "Variante A", quantity: 1, unit_price: 100, tva_rate: 20 }],
+});
+if (dg1.json?.id > 0) createdQuoteIds.push(dg1.json.id);
+if (dg1.json?.group_id > 0) createdGroupIds.push(dg1.json.group_id);
+check("devis cree dans un nouveau dossier", dg1.json?.group_id > 0 && dg1.json?.group_name === "Dossier Test Produit", JSON.stringify({ g: dg1.json?.group_id, n: dg1.json?.group_name }));
+const dg2 = await call("POST", "/api/quotes", {
+  client_id: dgClient.json?.id, status: "draft", group_id: dg1.json?.group_id,
+  items: [{ description: "Variante B", quantity: 1, unit_price: 200, tva_rate: 20 }],
+});
+if (dg2.json?.id > 0) createdQuoteIds.push(dg2.json.id);
+check("2e variante rattachee au meme dossier", dg2.json?.group_id === dg1.json?.group_id, `${dg2.json?.group_id} vs ${dg1.json?.group_id}`);
+const dup = await call("POST", `/api/quotes/${dg1.json?.id}/duplicate`);
+if (dup.json?.id > 0) createdQuoteIds.push(dup.json.id);
+check("duplication d'un devis (nouveau numero, meme dossier)", dup.json?.id > 0 && dup.json?.group_id === dg1.json?.group_id && dup.json?.number !== dg1.json?.number, `${dup.json?.number} vs ${dg1.json?.number}`);
+check("duplication repart en brouillon", dup.json?.status === "draft", dup.json?.status);
+const chose = await call("POST", `/api/quote-groups/${dg1.json?.group_id}/choose`, { quote_id: dg2.json?.id });
+check("choix du devis : dossier marque choisi", chose.json?.status === "chosen" && chose.json?.chosen_quote_id === dg2.json?.id, JSON.stringify({ s: chose.json?.status, c: chose.json?.chosen_quote_id }));
+const dg2After = await call("GET", `/api/quotes/${dg2.json?.id}`);
+const dg1After = await call("GET", `/api/quotes/${dg1.json?.id}`);
+const dupAfter = await call("GET", `/api/quotes/${dup.json?.id}`);
+check("devis choisi passe a 'accepted'", dg2After.json?.status === "accepted", dg2After.json?.status);
+check("autres variantes passees a 'declined'", dg1After.json?.status === "declined" && dupAfter.json?.status === "declined", `${dg1After.json?.status}/${dupAfter.json?.status}`);
+check("dossier present dans la liste", ((await call("GET", "/api/quote-groups")).json || []).some((g: any) => g.id === dg1.json?.group_id), "absent");
+check("rattachement d'un devis inexistant -> 404", (await call("POST", `/api/quote-groups/${dg1.json?.group_id}/quotes`, { quote_id: 999999 })).status === 404);
+
 /* Nettoyage : une seule passe, par identifiant, sur la base de dev.
    Les factures finalisees sont effacees en SQL car l'API les protege.
    Les reglages societe sont restaures : sans cela le test laissait a demeure
@@ -527,6 +558,7 @@ console.log("\n=== 10. Numerotation des devis ===");
   const pool = new pg.Pool({ connectionString: String(process.env.DATABASE_URL) });
   if (createdInvoiceIds.length) await pool.query("delete from invoices where id = any($1::int[])", [createdInvoiceIds]);
   if (createdQuoteIds.length) await pool.query("delete from quotes where id = any($1::int[])", [createdQuoteIds]);
+  if (createdGroupIds.length) await pool.query("delete from quote_groups where id = any($1::int[])", [createdGroupIds]);
   if (createdClientIds.length) await pool.query("delete from clients where id = any($1::int[])", [createdClientIds]);
   if (createdSignatoryIds.length) await pool.query("delete from signatories where id = any($1::int[])", [createdSignatoryIds]);
   /* L'API de modification de societe accepte une charge utile partielle,

@@ -4,7 +4,7 @@ import { api, BASE, statusColors, statusLabels } from "../lib/api";
 import type { Client, Company, Invoice, Order, Payment, Quote } from "../lib/types";
 import { fmt, fmtDate, money, round2, today } from "../lib/format";
 import { Badge, Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
-import { ArrowLeft, Download, FileText, Link2, Mail, MessageCircle, Plus, Printer, Share2, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, FileText, Folder, Link2, Mail, MessageCircle, Plus, Printer, Share2, Trash2 } from "lucide-react";
 import { cn } from "../lib/cn";
 
 type Kind = "quote" | "invoice" | "order";
@@ -297,6 +297,12 @@ export default function DocumentView({ kind }: { kind: Kind }) {
           }
         />
         {error && <Card className="mb-4 border-danger-line bg-danger-soft text-danger">{error}</Card>}
+        {doc && isQuote && (doc as Quote).group_id && (
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-subtle px-3 py-2 text-sm text-ink-3">
+            <Folder className="h-4 w-4 text-accent" />
+            Dossier de variantes : <span className="font-medium text-ink">{(doc as Quote).group_name || "—"}</span>
+          </div>
+        )}
       </div>
 
       {loading ? (

@@ -1,4 +1,4 @@
-import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Order, OrderStatus, Payment, Quote, QuoteStatus, Signatory, Stats } from "./types";
+import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Order, OrderStatus, Payment, Quote, QuoteGroup, QuoteStatus, Signatory, Stats } from "./types";
 import type {
   AppSettings, BankAccount, BankTransaction, ComplianceCheck, Expense, ExpenseInput, Kpi,
   ReminderLog, ReminderPreview, ReminderTarget, ReminderTemplate,
@@ -203,6 +203,17 @@ export const api = {
   convertQuote: (id: number, number?: string) =>
     request<Invoice>(`/api/quotes/${id}/convert`, { method: "POST", body: JSON.stringify({ number: number || "" }) }),
   shareQuote: (id: number) => request<{ id: number; number: string; sig: string }>(`/api/quotes/${id}/share`),
+  duplicateQuote: (id: number) => request<Quote>(`/api/quotes/${id}/duplicate`, { method: "POST" }),
+
+  getQuoteGroups: () => request<QuoteGroup[]>("/api/quote-groups"),
+  getQuoteGroup: (id: number) => request<QuoteGroup>(`/api/quote-groups/${id}`),
+  createQuoteGroup: (g: { name: string; client_id?: number | null; notes?: string }) =>
+    request<QuoteGroup>("/api/quote-groups", { method: "POST", body: JSON.stringify(g) }),
+  updateQuoteGroup: (id: number, g: { name?: string; client_id?: number | null; notes?: string }) =>
+    request<QuoteGroup>(`/api/quote-groups/${id}`, { method: "PUT", body: JSON.stringify(g) }),
+  deleteQuoteGroup: (id: number) => request<{ ok: boolean }>(`/api/quote-groups/${id}`, { method: "DELETE" }),
+  chooseQuoteInGroup: (id: number, quoteId: number) =>
+    request<QuoteGroup>(`/api/quote-groups/${id}/choose`, { method: "POST", body: JSON.stringify({ quote_id: quoteId }) }),
 
   getOrders: () => request<Order[]>(`/api/orders`),
   getOrder: (id: number) => request<Order>(`/api/orders/${id}`),
