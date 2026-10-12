@@ -63,6 +63,7 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
   const [groups, setGroups] = useState<QuoteGroup[]>([]);
   const [groupSel, setGroupSel] = useState<string>("");
   const [newGroupName, setNewGroupName] = useState("");
+  const [groupBusy, setGroupBusy] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
 
   const [autoState, setAutoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -158,6 +159,47 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
     api.getQuoteGroups().then(setGroups).catch(() => {});
   }, [isQuote]);
 
+  /* Un dossier appartient a un seul client : on ne propose que ceux du client
+     selectionne (ou ceux encore sans client). */
+  const groupsForClient = useMemo(
+    () => groups.filter((g) => !g.client_id || g.client_id === (clientId === "" ? null : Number(clientId))),
+    [groups, clientId],
+  );
+
+  async function creerDossier() {
+    const name = newGroupName.trim();
+    if (!name || clientId === "" || groupBusy) return;
+    setGroupBusy(true);
+    setError("");
+    try {
+      const g = await api.createQuoteGroup({ name, client_id: Number(clientId) });
+      setGroups(await api.getQuoteGroups());
+      setGroupSel(String(g.id));
+      setNewGroupName("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
+  async function supprimerDossier() {
+    const gid = Number(groupSel);
+    if (!gid || groupBusy) return;
+    if (!window.confirm("Supprimer ce dossier ? Les devis qu'il contient seront conservés mais détachés.")) return;
+    setGroupBusy(true);
+    setError("");
+    try {
+      await api.deleteQuoteGroup(gid);
+      setGroups(await api.getQuoteGroups());
+      setGroupSel("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGroupBusy(false);
+    }
+  }
+
   const totals = useMemo(() => {
     let ht = 0;
     let tva = 0;
@@ -249,10 +291,7 @@ function addLine() {
       photos,
       ...(isQuote
         ? {
-            group_id:
-              groupSel === "__new__" ? undefined : groupSel ? Number(groupSel) : null,
-            group_name:
-              groupSel === "__new__" && newGroupName.trim() ? newGroupName.trim() : undefined,
+            group_id: groupSel === "__new__" ? undefined : groupSel ? Number(groupSel) : null,
           }
         : {}),
     };
@@ -297,7 +336,7 @@ function addLine() {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, isQuote, groupSel, newGroupName]);
+  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, isQuote, groupSel]);
 
   async function save(nextStatus?: QuoteStatus) {
     setSaving(true);
@@ -424,35 +463,63 @@ function addLine() {
                 {isQuote && (
                   <div className="sm:col-span-2">
                     <Field label="Dossier (variantes du même produit)">
-                      <select
-                        className={inputCls}
-                        value={groupSel}
-                        disabled={frozen}
-                        onChange={(e) => setGroupSel(e.target.value)}
-                      >
-                        <option value="">— Aucun dossier —</option>
-                        {groups.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.name}
-                            {g.client?.name ? ` — ${g.client.name}` : ""}
-                            {g.status === "chosen" ? " ✓" : ""}
-                          </option>
-                        ))}
-                        <option value="__new__">+ Nouveau dossier…</option>
-                      </select>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <select
+                          className={inputCls}
+                          value={groupSel}
+                          disabled={frozen}
+                          onChange={(e) => setGroupSel(e.target.value)}
+                        >
+                          <option value="">— Aucun dossier —</option>
+                          {groupsForClient.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                              {g.status === "chosen" ? " ✓ (choisi)" : ""}
+                            </option>
+                          ))}
+                          <option value="__new__">+ Nouveau dossier…</option>
+                        </select>
+                        {groupSel && groupSel !== "__new__" && !frozen && (
+                          <button
+                            type="button"
+                            onClick={supprimerDossier}
+                            disabled={groupBusy}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-danger-line px-3 py-2 text-sm text-danger hover:bg-danger-soft disabled:opacity-50"
+                          >
+                            <Trash2 className="h-4 w-4" /> Supprimer le dossier
+                          </button>
+                        )}
+                      </div>
                     </Field>
                     {groupSel === "__new__" && (
-                      <input
-                        className={cn(inputCls, "mt-2")}
-                        placeholder="Nom du dossier (ex : Salon sur-mesure — M. Dupont)"
-                        value={newGroupName}
-                        disabled={frozen}
-                        onChange={(e) => setNewGroupName(e.target.value)}
-                      />
+                      <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                        <input
+                          className={inputCls}
+                          placeholder="Nom du dossier (ex : Salon sur-mesure)"
+                          value={newGroupName}
+                          disabled={frozen}
+                          onChange={(e) => setNewGroupName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              creerDossier();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={creerDossier}
+                          disabled={!newGroupName.trim() || clientId === "" || groupBusy}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-dark px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                          <Plus className="h-4 w-4" /> Créer le dossier
+                        </button>
+                      </div>
                     )}
                     <p className="mt-2 text-xs text-ink-4">
-                      Regroupez ici les 2-3 variantes d'un même produit. Depuis la liste des devis, désignez la variante
-                      choisie par le client : les autres passeront en « refusé ».
+                      {clientId === "" && groupSel === "__new__"
+                        ? "Sélectionnez d'abord un client, puis créez le dossier."
+                        : "Regroupez ici les 2-3 variantes d'un même produit. Depuis la liste des devis, désignez la variante choisie par le client : les autres passeront en « refusé »."}
                     </p>
                   </div>
                 )}

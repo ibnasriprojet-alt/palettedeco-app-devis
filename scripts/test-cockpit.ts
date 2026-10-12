@@ -535,6 +535,15 @@ const dg2 = await call("POST", "/api/quotes", {
 });
 if (dg2.json?.id > 0) createdQuoteIds.push(dg2.json.id);
 check("2e variante rattachee au meme dossier", dg2.json?.group_id === dg1.json?.group_id, `${dg2.json?.group_id} vs ${dg1.json?.group_id}`);
+/* Regression : le nom de dossier ne doit plus creer un doublon a chaque envoi. */
+const dgDup = await call("POST", "/api/quotes", {
+  client_id: dgClient.json?.id, status: "draft", group_name: "Dossier Test Produit",
+  items: [{ description: "Variante C", quantity: 1, unit_price: 300, tva_rate: 20 }],
+});
+if (dgDup.json?.id > 0) createdQuoteIds.push(dgDup.json.id);
+check("meme nom de dossier -> meme dossier (pas de doublon)", dgDup.json?.group_id === dg1.json?.group_id, `${dgDup.json?.group_id} vs ${dg1.json?.group_id}`);
+const gDup = await call("POST", "/api/quote-groups", { name: "dossier test produit", client_id: dgClient.json?.id });
+check("creation d'un dossier au nom identique -> reutilise l'existant", gDup.json?.id === dg1.json?.group_id, `${gDup.json?.id} vs ${dg1.json?.group_id}`);
 const dup = await call("POST", `/api/quotes/${dg1.json?.id}/duplicate`);
 if (dup.json?.id > 0) createdQuoteIds.push(dup.json.id);
 check("duplication d'un devis (nouveau numero, meme dossier)", dup.json?.id > 0 && dup.json?.group_id === dg1.json?.group_id && dup.json?.number !== dg1.json?.number, `${dup.json?.number} vs ${dg1.json?.number}`);

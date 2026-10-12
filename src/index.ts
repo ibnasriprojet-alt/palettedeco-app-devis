@@ -1150,9 +1150,19 @@ app.post("/api/quote-groups", async (c) => {
   const b = await c.req.json().catch(() => ({}));
   const name = String(b.name || "").trim();
   if (!name) return c.json({ error: "Nom du dossier obligatoire" }, 400);
+  const clientId = b.client_id || null;
+  /* Anti-doublon : un meme nom pour un meme client reutilise le dossier existant
+     (evite la creation de dossiers orphelins a chaque frappe/retry). */
+  const existing = (
+    await pool.query(
+      "SELECT * FROM quote_groups WHERE lower(name) = lower($1) AND client_id IS NOT DISTINCT FROM $2 LIMIT 1",
+      [name, clientId],
+    )
+  ).rows[0];
+  if (existing) return c.json(existing);
   const { rows } = await pool.query(
     "INSERT INTO quote_groups (name, client_id, notes) VALUES ($1,$2,$3) RETURNING *",
-    [name, b.client_id || null, b.notes || ""],
+    [name, clientId, b.notes || ""],
   );
   return c.json(rows[0], 201);
 });
