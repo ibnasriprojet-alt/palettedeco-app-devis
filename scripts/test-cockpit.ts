@@ -57,6 +57,7 @@ const isCreated = (r: { status: number; json: any }) => (r.status === 200 || r.s
 const createdInvoiceIds: number[] = [];
 const createdQuoteIds: number[] = [];
 const createdClientIds: number[] = [];
+const createdSignatoryIds: number[] = [];
 
 console.log("\n=== 1. Reglages et mode e-mail ===");
 /* Le mode en base depend de l'utilisateur (il peut passer en mode Reel dans
@@ -482,6 +483,29 @@ await call("POST", `/api/quotes/${vaQ2.json?.id}/status`, { status: "declined" }
 const vaDecl = await call("POST", `/api/public/quote/${vaQ2.json?.id}/accept`, { sig: (await call("GET", `/api/quotes/${vaQ2.json?.id}/share`)).json?.sig });
 check("devis refuse -> 409", vaDecl.status === 409, `recu ${vaDecl.status}`);
 
+console.log("\n=== 9. Signatures de devis ===");
+const PNG_1PX = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const sigCreate = await call("POST", "/api/signatories", { name: "Signataire Test", role: "Testeur", image: PNG_1PX });
+if (sigCreate.json?.id > 0) createdSignatoryIds.push(sigCreate.json.id);
+check("creation d'un signataire", sigCreate.status === 201 && sigCreate.json?.id > 0, `recu ${sigCreate.status}`);
+check("nom du signataire obligatoire (400)", (await call("POST", "/api/signatories", { name: "   " })).status === 400);
+const sigList = await call("GET", "/api/signatories");
+check("liste des signataires", Array.isArray(sigList.json?.items) && sigList.json.items.some((s: any) => s.id === sigCreate.json?.id));
+
+const signRes = await call("POST", `/api/quotes/${vaId}/signature`, {
+  signed: true, signed_at: "2026-10-12", signed_by: [sigCreate.json?.id], signature_mention: "Mention test",
+});
+check("signature du devis", signRes.status === 200 && signRes.json?.signed === true, `recu ${signRes.status}`);
+check("instantane du signataire conserve", (signRes.json?.signed_by || []).length === 1 && signRes.json.signed_by[0].name === "Signataire Test", JSON.stringify(signRes.json?.signed_by || []));
+check("mention de signature enregistree", signRes.json?.signature_mention === "Mention test", signRes.json?.signature_mention);
+const qSign = await call("GET", `/api/quotes/${vaId}`);
+check("signature relue via GET /api/quotes/:id", qSign.json?.signed === true && (qSign.json?.signed_by || []).length === 1);
+const sigPdf = await app.request(`/api/pdf/quote/${vaId}`, { headers: { "x-api-key": KEY } });
+check("PDF du devis signe genere", sigPdf.status === 200 && String(sigPdf.headers.get("content-type") || "").includes("application/pdf"), `recu ${sigPdf.status} ${sigPdf.headers.get("content-type")}`);
+const unsign = await call("POST", `/api/quotes/${vaId}/signature`, { signed: false });
+check("signature retiree", unsign.status === 200 && unsign.json?.signed === false && (unsign.json?.signed_by || []).length === 0);
+check("signature sur devis inexistant -> 404", (await call("POST", "/api/quotes/999999/signature", { signed: true })).status === 404);
+
 /* Nettoyage : une seule passe, par identifiant, sur la base de dev.
    Les factures finalisees sont effacees en SQL car l'API les protege.
    Les reglages societe sont restaures : sans cela le test laissait a demeure
@@ -492,6 +516,7 @@ check("devis refuse -> 409", vaDecl.status === 409, `recu ${vaDecl.status}`);
   if (createdInvoiceIds.length) await pool.query("delete from invoices where id = any($1::int[])", [createdInvoiceIds]);
   if (createdQuoteIds.length) await pool.query("delete from quotes where id = any($1::int[])", [createdQuoteIds]);
   if (createdClientIds.length) await pool.query("delete from clients where id = any($1::int[])", [createdClientIds]);
+  if (createdSignatoryIds.length) await pool.query("delete from signatories where id = any($1::int[])", [createdSignatoryIds]);
   /* L'API de modification de societe accepte une charge utile partielle,
      on renvoie donc uniquement les champs reellement patches. */
   if (Object.keys(patch).length) {

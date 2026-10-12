@@ -488,6 +488,32 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   <div className="whitespace-pre-line text-[10px] leading-relaxed text-ink-3">{company.mentions}</div>
                 )}
               </div>
+
+              {/* Signatures (devis signé) */}
+              {isQuote && (doc as Quote).signed && (
+                <div className="mt-8 border-t border-line-2 pt-4 print-break-avoid">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-ink-3">Signatures</div>
+                  {(doc as Quote).signature_mention && (
+                    <p className="mt-1 text-xs italic leading-relaxed text-ink-4">{(doc as Quote).signature_mention}</p>
+                  )}
+                  {(doc as Quote).signed_at && (
+                    <div className="mt-1 text-[11px] text-ink-4">Signé le {fmtDate(String((doc as Quote).signed_at).slice(0, 10))}</div>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-end gap-6">
+                    {((doc as Quote).signed_by || []).map((s) => (
+                      <div key={s.id} className="text-center">
+                        {s.image ? (
+                          <img src={s.image} alt={`Signature ${s.name}`} className="mx-auto h-16 object-contain" />
+                        ) : (
+                          <div className="h-16" />
+                        )}
+                        <div className="mt-1 min-w-32 border-t border-line pt-1 text-[11px] font-medium text-ink-2">{s.name}</div>
+                        {s.role && <div className="text-[10px] text-ink-4">{s.role}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

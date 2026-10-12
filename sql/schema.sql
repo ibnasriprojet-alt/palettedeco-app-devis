@@ -173,3 +173,18 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 UPDATE invoices inv SET client_id = qt.client_id
 FROM quotes qt
 WHERE inv.client_id IS NULL AND qt.id = inv.quote_id AND qt.client_id IS NOT NULL;
+-- Signataires reutilisables et signature des devis (migration 005)
+CREATE TABLE IF NOT EXISTS signatories (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT DEFAULT '',
+  image TEXT DEFAULT '',
+  active BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed_at TIMESTAMPTZ;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signed_by JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS signature_mention TEXT DEFAULT '';

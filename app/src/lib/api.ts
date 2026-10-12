@@ -1,4 +1,4 @@
-import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Order, OrderStatus, Payment, Quote, QuoteStatus, Stats } from "./types";
+import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Order, OrderStatus, Payment, Quote, QuoteStatus, Signatory, Stats } from "./types";
 import type {
   AppSettings, BankAccount, BankTransaction, ComplianceCheck, Expense, ExpenseInput, Kpi,
   ReminderLog, ReminderPreview, ReminderTarget, ReminderTemplate,
@@ -174,6 +174,17 @@ export const api = {
   getCompany: () => request<Company>("/api/company"),
   saveCompany: (c: Partial<Company>) => request<Company>("/api/company", { method: "PUT", body: JSON.stringify(c) }),
 
+  getSignatories: () => request<{ items: Signatory[] }>("/api/signatories"),
+  createSignatory: (s: Partial<Signatory>) =>
+    request<Signatory>("/api/signatories", { method: "POST", body: JSON.stringify(s) }),
+  updateSignatory: (id: number, s: Partial<Signatory>) =>
+    request<Signatory>(`/api/signatories/${id}`, { method: "PUT", body: JSON.stringify(s) }),
+  deleteSignatory: (id: number) =>
+    request<{ ok: boolean }>(`/api/signatories/${id}`, { method: "DELETE" }),
+  saveQuoteSignature: (
+    id: number,
+    payload: { signed: boolean; signed_at?: string | null; signed_by?: number[]; signature_mention?: string },
+  ) => request<Quote>(`/api/quotes/${id}/signature`, { method: "POST", body: JSON.stringify(payload) }),
   getClients: () => request<Client[]>("/api/clients"),
   createClient: (c: Partial<Client>) => request<Client>("/api/clients", { method: "POST", body: JSON.stringify(c) }),
   updateClient: (id: number, c: Partial<Client>) =>

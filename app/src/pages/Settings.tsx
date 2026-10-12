@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { Company } from "../lib/types";
 import { Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
 import { CockpitSettings } from "../components/CockpitSettings";
+import SignatoriesSettings from "../components/SignatoriesSettings";
 import { Check, Download, FileText, ImagePlus, LogOut, Save, Trash2, Upload } from "lucide-react";
 import { clearSession } from "./Login";
 import { today } from "../lib/format";
@@ -246,6 +247,8 @@ export default function Settings() {
             </Card>
 
             <CockpitSettings />
+
+            <SignatoriesSettings />
 
             <Card>
               <h2 className="mb-3 font-semibold text-ink">Sécurité</h2>

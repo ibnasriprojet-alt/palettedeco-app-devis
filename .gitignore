@@ -11,4 +11,6 @@ app/node_modules/
 .vercel
 .env*
 tsconfig.tsbuildinfo
+tsconfig.*.tsbuildinfo
 backups/
+Signature *.pdf

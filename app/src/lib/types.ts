@@ -90,6 +90,27 @@ export interface Quote {
   photos?: string[];
   client?: Client | null;
   synced_invoice_id?: number | null;
+  signed?: boolean;
+  signed_at?: string | null;
+  signed_by?: SignedBy[];
+  signature_mention?: string;
+}
+
+export interface Signatory {
+  id: number;
+  name: string;
+  role: string;
+  image: string;
+  active: boolean;
+  sort_order: number;
+  created_at?: string;
+}
+
+export interface SignedBy {
+  id: number;
+  name: string;
+  role: string;
+  image: string;
 }
 
 export interface Order {

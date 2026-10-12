@@ -537,6 +537,55 @@ async function buildDocumentPdf(type, id) {
       if (company.mentions) pdf.text(company.mentions, M, pdf.y, { width: pageW - 2 * M });
     }
 
+    /* Signatures : devis signe par le client et l'entreprise. */
+    if (isQuote && doc.signed) {
+      const sigs = Array.isArray(doc.signed_by) ? doc.signed_by : [];
+      const boxW = 150;
+      const boxH = 52;
+      const gap = 20;
+      const mention = doc.signature_mention || "";
+      pdf.y += 26;
+      ensureY(80);
+      pdf.font("Helvetica-Bold").fontSize(7.5).fillColor(gray).text("SIGNATURES", M, pdf.y);
+      pdf.y += 11;
+      if (mention) {
+        pdf.font("Helvetica-Oblique").fontSize(8).fillColor(gray);
+        const mh = pdf.heightOfString(mention, { width: pageW - 2 * M, lineGap: 3 });
+        pdf.text(mention, M, pdf.y, { width: pageW - 2 * M, lineGap: 3 });
+        pdf.y += mh + 3;
+      }
+      if (doc.signed_at) {
+        pdf.font("Helvetica").fontSize(8).fillColor(gray).text(`Signé le ${dateFr(String(doc.signed_at).slice(0, 10))}`, M, pdf.y);
+        pdf.y += 12;
+      }
+      let col = 0;
+      let baseY = pdf.y;
+      for (const s of sigs) {
+        if (col === 0) {
+          ensureY(boxH + 36);
+          baseY = pdf.y;
+        }
+        const x = M + col * (boxW + gap);
+        if (s.image && String(s.image).startsWith("data:image")) {
+          try {
+            pdf.image(s.image, x, baseY, { fit: [boxW, boxH] });
+          } catch {
+            /* image illisible : on garde la ligne signee */
+          }
+        }
+        const lineY = baseY + boxH + 2;
+        pdf.strokeColor("#d6d3d1").lineWidth(0.6).moveTo(x, lineY).lineTo(x + boxW, lineY).stroke();
+        pdf.font("Helvetica-Bold").fontSize(8).fillColor(ink).text(s.name || "", x, lineY + 3, { width: boxW });
+        if (s.role) pdf.font("Helvetica").fontSize(7).fillColor(gray).text(s.role, x, lineY + 13, { width: boxW });
+        col++;
+        if (col >= 3) {
+          col = 0;
+          pdf.y = baseY + boxH + 36;
+        }
+      }
+      if (col !== 0) pdf.y = baseY + boxH + 36;
+    }
+
         /* Factur-X : XML de facture rattache au PDF des factures. */
     if (type === "invoice") {
       try {
@@ -705,6 +754,52 @@ app.put("/api/company", async (c) => {
   const saved = rows[0];
   delete saved.app_password;
   return c.json(saved);
+});
+
+/* ---------- Signataires (signatures reutilisables) ---------- */
+
+app.get("/api/signatories", async (c) => {
+  const { rows } = await pool.query(
+    "SELECT * FROM signatories ORDER BY sort_order, id",
+  );
+  return c.json({ items: rows });
+});
+
+app.post("/api/signatories", async (c) => {
+  const b = await c.req.json();
+  if (!String(b.name || "").trim()) return c.json({ error: "Le nom est obligatoire." }, 400);
+  const { rows } = await pool.query(
+    `INSERT INTO signatories (name, role, image, active, sort_order)
+     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    [String(b.name).trim(), b.role || "", b.image || "", b.active === undefined ? true : !!b.active, Number(b.sort_order) || 0],
+  );
+  return c.json(rows[0], 201);
+});
+
+app.put("/api/signatories/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json();
+  const cur = (await pool.query("SELECT * FROM signatories WHERE id = $1", [id])).rows[0];
+  if (!cur) return c.json({ error: "Signataire introuvable" }, 404);
+  const { rows } = await pool.query(
+    `UPDATE signatories SET name=$1, role=$2, image=$3, active=$4, sort_order=$5
+     WHERE id=$6 RETURNING *`,
+    [
+      b.name === undefined ? cur.name : String(b.name).trim(),
+      b.role === undefined ? cur.role : b.role,
+      b.image === undefined ? cur.image : b.image,
+      b.active === undefined ? cur.active : !!b.active,
+      b.sort_order === undefined ? cur.sort_order : Number(b.sort_order) || 0,
+      id,
+    ],
+  );
+  return c.json(rows[0]);
+});
+
+app.delete("/api/signatories/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  await pool.query("DELETE FROM signatories WHERE id = $1", [id]);
+  return c.json({ ok: true });
 });
 
 app.get("/api/clients", async (c) => {
@@ -949,6 +1044,40 @@ app.put("/api/quotes/:id", async (c) => {
   } finally {
     await client.end();
   }
+});
+
+app.post("/api/quotes/:id/signature", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json();
+  const exists = (await pool.query("SELECT id FROM quotes WHERE id = $1", [id])).rows[0];
+  if (!exists) return c.json({ error: "Devis introuvable" }, 404);
+
+  const signed = !!b.signed;
+  const mention = typeof b.signature_mention === "string" ? b.signature_mention : undefined;
+
+  /* Instantane des signataires : le document signe reste intact meme si la
+     personne est renommee ou supprimee plus tard. */
+  let snapshots: Array<Record<string, unknown>> = [];
+  if (signed) {
+    const ids = Array.isArray(b.signed_by)
+      ? b.signed_by.map((x: unknown) => Number(x)).filter((n: number) => Number.isFinite(n))
+      : [];
+    if (ids.length) {
+      const { rows } = await pool.query("SELECT id, name, role, image FROM signatories WHERE id = ANY($1)", [ids]);
+      const byId = new Map(rows.map((r: any) => [r.id, r]));
+      snapshots = ids.map((sid: number) => byId.get(sid)).filter(Boolean);
+    }
+  }
+
+  const signedAt = signed ? (b.signed_at || new Date().toISOString()) : null;
+  await pool.query(
+    `UPDATE quotes SET signed=$1, signed_at=$2, signed_by=$3::jsonb,
+       signature_mention = CASE WHEN $4::text IS NULL THEN signature_mention ELSE $4 END,
+       updated_at=now()
+     WHERE id=$5`,
+    [signed, signedAt, JSON.stringify(snapshots), mention === undefined ? null : mention, id],
+  );
+  return c.json(await getQuote(id));
 });
 
 app.post("/api/quotes/:id/status", async (c) => {

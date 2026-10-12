@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, statusLabels } from "../lib/api";
-import type { Client, Company, QuoteItem, QuoteStatus } from "../lib/types";
+import type { Client, Company, Quote, QuoteItem, QuoteStatus, SignedBy } from "../lib/types";
 import { addDays, fmt, money, round2, today } from "../lib/format";
 import { Button, Card, Field, LinkButton, PageHeader, Spinner, inputCls } from "../components/ui";
+import SignatureCard from "../components/SignatureCard";
 import { fileToPhoto, MAX_PHOTOS } from "../lib/photos";
 import {
   AlertCircle,
@@ -53,6 +54,11 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
   const [items, setItems] = useState<QuoteItem[]>([{ description: "", quantity: 1, unit_price: "", tva_rate: "" }]);
   const [photos, setPhotos] = useState<string[]>([]);
 
+  const [signed, setSigned] = useState(false);
+  const [signedAt, setSignedAt] = useState<string | null>(null);
+  const [signedBy, setSignedBy] = useState<SignedBy[]>([]);
+  const [signatureMention, setSignatureMention] = useState("");
+
   const [autoState, setAutoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [autoError, setAutoError] = useState("");
   const hydratedRef = useRef(false);
@@ -101,6 +107,13 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
           );
           setPhotos(Array.isArray(q.photos) ? q.photos : []);
           setInvoiced(q.status === "invoiced");
+          if (isQuote) {
+            const qq = q as Quote;
+            setSigned(!!qq.signed);
+            setSignedAt(qq.signed_at || null);
+            setSignedBy(Array.isArray(qq.signed_by) ? qq.signed_by : []);
+            setSignatureMention(qq.signature_mention || "");
+          }
           setError("");
           hydratedRef.current = true;
           skipRef.current = true;
@@ -118,6 +131,10 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
         setNotes("");
         setPhotos([]);
         setInvoiced(false);
+        setSigned(false);
+        setSignedAt(null);
+        setSignedBy([]);
+        setSignatureMention("");
         setError("");
         hydratedRef.current = true;
       }
@@ -566,6 +583,20 @@ function addLine() {
                 </div>
               </div>
             </Card>
+
+            {isQuote && editId && (
+              <SignatureCard
+                key={editId}
+                quoteId={editId}
+                value={{ signed, signed_at: signedAt, signed_by: signedBy, signature_mention: signatureMention }}
+                onSaved={(q) => {
+                  setSigned(!!q.signed);
+                  setSignedAt(q.signed_at || null);
+                  setSignedBy(Array.isArray(q.signed_by) ? q.signed_by : []);
+                  setSignatureMention(q.signature_mention || "");
+                }}
+              />
+            )}
 
             <Card className="space-y-2">
               {editId && !frozen && (
