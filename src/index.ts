@@ -892,17 +892,17 @@ async function getDoc(type, id) {
 
 /* Determine le dossier d'un devis : par identifiant existant, ou par nom
    (cree le dossier au besoin pour ce client). Retourne null si aucun. */
-async function resolveGroupId(client, groupId, groupName, quoteClientId) {
+async function resolveGroupId(client, groupId, groupName, ownerClientId) {
   const name = String(groupName || "").trim();
   if (name) {
     const found = await client.query(
       "SELECT id FROM quote_groups WHERE lower(name) = lower($1) AND client_id IS NOT DISTINCT FROM $2 LIMIT 1",
-      [name, quoteClientId || null],
+      [name, ownerClientId || null],
     );
     if (found.rows[0]) return found.rows[0].id;
     const created = await client.query(
       "INSERT INTO quote_groups (name, client_id) VALUES ($1,$2) RETURNING id",
-      [name, quoteClientId || null],
+      [name, ownerClientId || null],
     );
     return created.rows[0].id;
   }
@@ -1139,7 +1139,8 @@ app.delete("/api/quotes/:id", async (c) => {
 app.get("/api/quote-groups", async (c) => {
   const { rows } = await pool.query(
     `SELECT g.*, json_build_object('id', cl.id, 'name', cl.name) AS client,
-            (SELECT count(*) FROM quotes q WHERE q.group_id = g.id) AS quote_count
+            (SELECT count(*) FROM quotes q WHERE q.group_id = g.id) AS quote_count,
+            (SELECT count(*) FROM invoices i WHERE i.group_id = g.id) AS invoice_count
        FROM quote_groups g LEFT JOIN clients cl ON cl.id = g.client_id
       ORDER BY g.id DESC`,
   );
@@ -1179,7 +1180,15 @@ app.get("/api/quote-groups/:id", async (c) => {
       [id],
     )
   ).rows;
-  return c.json({ ...g, quotes });
+  const invoices = (
+    await pool.query(
+      `SELECT i.*, g.name AS group_name, g.status AS group_status
+         FROM invoices i LEFT JOIN quote_groups g ON g.id = i.group_id
+        WHERE i.group_id = $1 ORDER BY i.id DESC`,
+      [id],
+    )
+  ).rows;
+  return c.json({ ...g, quotes, invoices });
 });
 
 app.put("/api/quote-groups/:id", async (c) => {
@@ -1198,8 +1207,9 @@ app.put("/api/quote-groups/:id", async (c) => {
 
 app.delete("/api/quote-groups/:id", async (c) => {
   const id = Number(c.req.param("id"));
-  /* On detache les devis : ils redeviennent autonomes, aucune donnee perdue. */
+  /* On detache les devis et factures : ils redeviennent autonomes, aucune donnee perdue. */
   await pool.query("UPDATE quotes SET group_id = NULL WHERE group_id = $1", [id]);
+  await pool.query("UPDATE invoices SET group_id = NULL WHERE group_id = $1", [id]);
   await pool.query("DELETE FROM quote_groups WHERE id = $1", [id]);
   return c.json({ ok: true });
 });
@@ -1227,6 +1237,62 @@ app.delete("/api/quote-groups/:id/quotes/:quoteId", async (c) => {
   const quoteId = Number(c.req.param("quoteId"));
   await pool.query("UPDATE quotes SET group_id = NULL, updated_at = now() WHERE id = $1 AND group_id = $2", [quoteId, id]);
   return c.json({ ok: true });
+});
+
+/* Rattacher une facture a un dossier (meme client). */
+app.post("/api/quote-groups/:id/invoices", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json().catch(() => ({}));
+  const invoiceId = Number(b.invoice_id);
+  const g = (await pool.query("SELECT * FROM quote_groups WHERE id = $1", [id])).rows[0];
+  if (!g) return c.json({ error: "Dossier introuvable" }, 404);
+  const inv = (
+    await pool.query(
+      "SELECT i.id, COALESCE(i.client_id, (SELECT q.client_id FROM quotes q WHERE q.id = i.quote_id)) AS client_id FROM invoices i WHERE i.id = $1",
+      [invoiceId],
+    )
+  ).rows[0];
+  if (!inv) return c.json({ error: "Facture introuvable" }, 404);
+  if (g.client_id && inv.client_id && g.client_id !== inv.client_id) {
+    return c.json({ error: "La facture et le dossier n'ont pas le même client." }, 400);
+  }
+  if (!g.client_id && inv.client_id) await pool.query("UPDATE quote_groups SET client_id = $1 WHERE id = $2", [inv.client_id, id]);
+  await pool.query("UPDATE invoices SET group_id = $1, updated_at = now() WHERE id = $2", [id, invoiceId]);
+  return c.json(await getInvoice(invoiceId));
+});
+
+/* Detacher une facture d'un dossier. */
+app.delete("/api/quote-groups/:id/invoices/:invoiceId", async (c) => {
+  const id = Number(c.req.param("id"));
+  const invoiceId = Number(c.req.param("invoiceId"));
+  await pool.query("UPDATE invoices SET group_id = NULL, updated_at = now() WHERE id = $1 AND group_id = $2", [invoiceId, id]);
+  return c.json({ ok: true });
+});
+
+/* Definir (ou vider) le dossier d'une facture directement depuis la facture.
+   Le dossier doit appartenir au meme client que la facture. */
+app.put("/api/invoices/:id/group", async (c) => {
+  const id = Number(c.req.param("id"));
+  const b = await c.req.json().catch(() => ({}));
+  const inv = (
+    await pool.query(
+      "SELECT i.id, COALESCE(i.client_id, (SELECT q.client_id FROM quotes q WHERE q.id = i.quote_id)) AS client_id FROM invoices i WHERE i.id = $1",
+      [id],
+    )
+  ).rows[0];
+  if (!inv) return c.json({ error: "Facture introuvable" }, 404);
+  if (b.group_id === null || (b.group_id === undefined && !String(b.group_name || "").trim())) {
+    await pool.query("UPDATE invoices SET group_id = NULL, updated_at = now() WHERE id = $1", [id]);
+    return c.json(await getInvoice(id));
+  }
+  const groupId = await resolveGroupId(pool, b.group_id, b.group_name, inv.client_id);
+  if (!groupId) return c.json({ error: "Dossier introuvable" }, 404);
+  const g = (await pool.query("SELECT client_id FROM quote_groups WHERE id = $1", [groupId])).rows[0];
+  if (g && g.client_id && inv.client_id && g.client_id !== inv.client_id) {
+    return c.json({ error: "La facture et le dossier n'ont pas le même client." }, 400);
+  }
+  await pool.query("UPDATE invoices SET group_id = $1, updated_at = now() WHERE id = $2", [groupId, id]);
+  return c.json(await getInvoice(id));
 });
 
 /* Le client a choisi une variante : elle est acceptee, les autres refusees,
@@ -1593,16 +1659,30 @@ async function getInvoice(id) {
   const payments = await listPayments(id);
   const paid = money(payments.reduce((s, p) => s + Number(p.amount), 0));
   const remaining = money(Math.max(Number(inv.total_ttc) - paid, 0));
-  return { ...inv, items, client, quote, payments, paid, remaining };
+  const group = inv.group_id
+    ? (await pool.query("SELECT name, status FROM quote_groups WHERE id = $1", [inv.group_id])).rows[0] || null
+    : null;
+  return {
+    ...inv,
+    group_name: group ? group.name : null,
+    group_status: group ? group.status : null,
+    items,
+    client,
+    quote,
+    payments,
+    paid,
+    remaining,
+  };
 }
 
 app.get("/api/invoices", async (c) => {
   const { rows } = await pool.query(
     "SELECT inv.*, " +
       "qt.number AS quote_number, " +
+      "g.name AS group_name, g.status AS group_status, " +
       "coalesce((SELECT sum(p.amount) FROM payments p WHERE p.invoice_id = inv.id), 0) AS paid, " +
       "json_build_object('id', cl.id, 'name', cl.name, 'email', cl.email, 'phone', cl.phone, 'address', cl.address, 'vat_number', cl.vat_number) AS client " +
-      "FROM invoices inv LEFT JOIN quotes qt ON qt.id = inv.quote_id LEFT JOIN clients cl ON cl.id = COALESCE(inv.client_id, qt.client_id) ORDER BY inv.id DESC",
+      "FROM invoices inv LEFT JOIN quotes qt ON qt.id = inv.quote_id LEFT JOIN quote_groups g ON g.id = inv.group_id LEFT JOIN clients cl ON cl.id = COALESCE(inv.client_id, qt.client_id) ORDER BY inv.id DESC",
   );
   return c.json(rows);
 });
@@ -1652,8 +1732,8 @@ app.post("/api/quotes/:id/convert", async (c) => {
       number = await autoNext(client, "invoices", "fac", year);
     }
     const { rows } = await client.query(
-      `INSERT INTO invoices (number, quote_id, client_id, status, issue_date, due_date, conditions, total_ht, total_tva, total_ttc, photos)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb) RETURNING *`,
+      `INSERT INTO invoices (number, quote_id, client_id, status, issue_date, due_date, conditions, total_ht, total_tva, total_ttc, photos, group_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12) RETURNING *`,
       [
         number,
         id,
@@ -1666,6 +1746,7 @@ app.post("/api/quotes/:id/convert", async (c) => {
         q.total_tva,
         q.total_ttc,
         JSON.stringify(normalizePhotos(q.photos)),
+        q.group_id || null,
       ],
     );
     const inv = rows[0];

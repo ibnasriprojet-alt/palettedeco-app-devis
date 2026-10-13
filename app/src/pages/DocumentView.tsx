@@ -297,10 +297,11 @@ export default function DocumentView({ kind }: { kind: Kind }) {
           }
         />
         {error && <Card className="mb-4 border-danger-line bg-danger-soft text-danger">{error}</Card>}
-        {doc && isQuote && (doc as Quote).group_id && (
+        {doc && (doc as Quote | Invoice).group_id && (
           <div className="flex items-center gap-2 rounded-xl border border-line bg-subtle px-3 py-2 text-sm text-ink-3">
             <Folder className="h-4 w-4 text-accent" />
-            Dossier de variantes : <span className="font-medium text-ink">{(doc as Quote).group_name || "—"}</span>
+            {isQuote ? "Dossier de variantes" : "Dossier"} :{" "}
+            <span className="font-medium text-ink">{(doc as Quote | Invoice).group_name || "—"}</span>
           </div>
         )}
       </div>

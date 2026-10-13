@@ -214,6 +214,8 @@ export const api = {
   deleteQuoteGroup: (id: number) => request<{ ok: boolean }>(`/api/quote-groups/${id}`, { method: "DELETE" }),
   chooseQuoteInGroup: (id: number, quoteId: number) =>
     request<QuoteGroup>(`/api/quote-groups/${id}/choose`, { method: "POST", body: JSON.stringify({ quote_id: quoteId }) }),
+  setInvoiceGroup: (id: number, g: { group_id?: number | null; group_name?: string }) =>
+    request<Invoice>(`/api/invoices/${id}/group`, { method: "PUT", body: JSON.stringify(g) }),
 
   getOrders: () => request<Order[]>(`/api/orders`),
   getOrder: (id: number) => request<Order>(`/api/orders/${id}`),

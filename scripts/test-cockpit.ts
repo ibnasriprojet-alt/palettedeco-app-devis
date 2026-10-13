@@ -558,6 +558,23 @@ check("autres variantes passees a 'declined'", dg1After.json?.status === "declin
 check("dossier present dans la liste", ((await call("GET", "/api/quote-groups")).json || []).some((g: any) => g.id === dg1.json?.group_id), "absent");
 check("rattachement d'un devis inexistant -> 404", (await call("POST", `/api/quote-groups/${dg1.json?.group_id}/quotes`, { quote_id: 999999 })).status === 404);
 
+/* Factures rattachees au dossier : une facture issue d'un devis choisi herite du
+   dossier, et on peut rattacher/detacher une facture directement. */
+const conv = await call("POST", `/api/quotes/${dg2.json?.id}/convert`);
+if (conv.json?.id > 0) createdInvoiceIds.push(conv.json.id);
+check("facture issue du devis choisi herite du dossier", conv.json?.group_id === dg1.json?.group_id, `${conv.json?.group_id} vs ${dg1.json?.group_id}`);
+const invDetach = await call("PUT", `/api/invoices/${conv.json?.id}/group`, { group_id: null });
+check("detacher une facture d'un dossier", invDetach.json?.group_id === null, JSON.stringify(invDetach.json?.group_id));
+const invAttach = await call("PUT", `/api/invoices/${conv.json?.id}/group`, { group_id: dg1.json?.group_id });
+check("rattacher une facture a un dossier", invAttach.json?.group_id === dg1.json?.group_id, `${invAttach.json?.group_id} vs ${dg1.json?.group_id}`);
+const gWithInv = ((await call("GET", "/api/quote-groups")).json || []).find((g: any) => g.id === dg1.json?.group_id);
+check("compteur de factures du dossier", gWithInv?.invoice_count >= 1, JSON.stringify(gWithInv?.invoice_count));
+const gDetail = await call("GET", `/api/quote-groups/${dg1.json?.group_id}`);
+check("detail du dossier inclut les factures", (gDetail.json?.invoices || []).some((i: any) => i.id === conv.json?.id), `invoices=${(gDetail.json?.invoices || []).length}`);
+check("detacher via le dossier", (await call("DELETE", `/api/quote-groups/${dg1.json?.group_id}/invoices/${conv.json?.id}`)).status === 200 && (await call("GET", `/api/invoices/${conv.json?.id}`)).json?.group_id === null, "toujours rattachee");
+check("rattacher via le dossier", (await call("POST", `/api/quote-groups/${dg1.json?.group_id}/invoices`, { invoice_id: conv.json?.id })).json?.group_id === dg1.json?.group_id, "non rattachee");
+check("facture inexistante dans un dossier -> 404", (await call("POST", `/api/quote-groups/${dg1.json?.group_id}/invoices`, { invoice_id: 999999 })).status === 404);
+
 /* Nettoyage : une seule passe, par identifiant, sur la base de dev.
    Les factures finalisees sont effacees en SQL car l'API les protege.
    Les reglages societe sont restaures : sans cela le test laissait a demeure

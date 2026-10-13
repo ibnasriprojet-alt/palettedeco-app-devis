@@ -112,7 +112,9 @@ export interface QuoteGroup {
   updated_at?: string;
   client?: { id: number; name: string } | null;
   quote_count?: number;
+  invoice_count?: number;
   quotes?: Quote[];
+  invoices?: Invoice[];
 }
 
 export interface Signatory {
@@ -192,6 +194,9 @@ export interface Invoice {
   remaining?: number;
   finalized?: boolean;
   finalized_at?: string | null;
+  group_id?: number | null;
+  group_name?: string | null;
+  group_status?: "open" | "chosen" | null;
 }
 
 export interface ClientHistory {

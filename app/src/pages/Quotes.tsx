@@ -270,7 +270,9 @@ export default function Quotes() {
                     </div>
                     <div className="truncate text-xs text-ink-4">
                       {g.client?.name ? `${g.client.name} · ` : ""}
-                      {list.length} devis · {fmt(total)}
+                      {list.length} devis
+                      {g.invoice_count ? ` · ${g.invoice_count} facture${g.invoice_count > 1 ? "s" : ""}` : ""}
+                      {" "}· {fmt(total)}
                       {chosen ? ` · retenu : ${chosen.number}` : ""}
                     </div>
                   </div>

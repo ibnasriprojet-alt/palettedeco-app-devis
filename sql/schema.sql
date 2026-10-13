@@ -205,3 +205,8 @@ ALTER TABLE quotes ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES quote_gr
 
 CREATE INDEX IF NOT EXISTS idx_quotes_group ON quotes(group_id);
 CREATE INDEX IF NOT EXISTS idx_quote_groups_client ON quote_groups(client_id);
+
+-- Un dossier peut aussi regrouper des factures (devis + factures du meme client/projet).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES quote_groups(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_invoices_group ON invoices(group_id);
