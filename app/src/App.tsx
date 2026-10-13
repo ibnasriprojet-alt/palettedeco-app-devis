@@ -10,6 +10,8 @@ import DocumentView from "./pages/DocumentView";
 import Clients from "./pages/Clients";
 import ClientForm from "./pages/ClientForm";
 import Invoices from "./pages/Invoices";
+import Dossiers from "./pages/Dossiers";
+import DossierView from "./pages/DossierView";
 import Expenses from "./pages/Expenses";
 import ExpensesNew from "./pages/ExpensesNew";
 import Cash from "./pages/Cash";
@@ -43,6 +45,8 @@ export default function App() {
                   <Route path="/clients/:id" element={<ClientForm />} />
                   <Route path="/invoices" element={<Invoices />} />
                   <Route path="/invoices/:id" element={<DocumentView kind="invoice" />} />
+                  <Route path="/dossiers" element={<Dossiers />} />
+                  <Route path="/dossiers/:id" element={<DossierView />} />
                   <Route path="/expenses" element={<Expenses />} />
                   <Route path="/expenses/new" element={<ExpensesNew />} />
                   <Route path="/cash" element={<Cash />} />

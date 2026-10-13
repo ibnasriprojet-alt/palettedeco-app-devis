@@ -4,7 +4,7 @@ import { api, statusColors, statusLabels } from "../lib/api";
 import type { Invoice, QuoteGroup } from "../lib/types";
 import { fmt, fmtDate } from "../lib/format";
 import { Badge, Card, EmptyState, PageHeader, Spinner, inputCls } from "../components/ui";
-import { ChevronDown, ChevronRight, Folder, ReceiptText, Search, SearchX } from "lucide-react";
+import { ChevronDown, ChevronRight, Folder, FolderOpen, ReceiptText, Search, SearchX } from "lucide-react";
 import { cn } from "../lib/cn";
 
 export default function Invoices() {
@@ -194,36 +194,45 @@ export default function Invoices() {
             const total = list.reduce((s, d) => s + Number(d.total_ttc), 0);
             return (
               <div key={g.id} className="rounded-2xl border border-line bg-subtle p-3">
-                <button
-                  onClick={() => toggle(g.id)}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-ink-3" />
-                  )}
-                  <Folder className="h-5 w-5 shrink-0 text-accent" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-ink">{g.name}</span>
-                      <Badge
-                        className={
-                          g.status === "chosen"
-                            ? "bg-success-soft text-success border-success-line"
-                            : "bg-surface-3 text-ink-2 border-line-2"
-                        }
-                      >
-                        {g.status === "chosen" ? "Dossier choisi" : "Dossier ouvert"}
-                      </Badge>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggle(g.id)}
+                    className="flex flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
+                  >
+                    {isCollapsed ? (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-ink-3" />
+                    )}
+                    <Folder className="h-5 w-5 shrink-0 text-accent" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-ink">{g.name}</span>
+                        <Badge
+                          className={
+                            g.status === "chosen"
+                              ? "bg-success-soft text-success border-success-line"
+                              : "bg-surface-3 text-ink-2 border-line-2"
+                          }
+                        >
+                          {g.status === "chosen" ? "Dossier choisi" : "Dossier ouvert"}
+                        </Badge>
+                      </div>
+                      <div className="truncate text-xs text-ink-4">
+                        {g.client?.name ? `${g.client.name} · ` : ""}
+                        {list.length} facture{list.length > 1 ? "s" : ""}
+                        {g.quote_count ? ` · ${g.quote_count} devis` : ""} · {fmt(total)}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-ink-4">
-                      {g.client?.name ? `${g.client.name} · ` : ""}
-                      {list.length} facture{list.length > 1 ? "s" : ""}
-                      {g.quote_count ? ` · ${g.quote_count} devis` : ""} · {fmt(total)}
-                    </div>
-                  </div>
-                </button>
+                  </button>
+                  <Link
+                    to={`/dossiers/${g.id}`}
+                    title="Vue combinée du dossier (devis + factures)"
+                    className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-hover"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Vue du dossier</span>
+                  </Link>
+                </div>
                 {!isCollapsed && (
                   <div className="mt-2 space-y-2">
                     {list.map((inv) => (

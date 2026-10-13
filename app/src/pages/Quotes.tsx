@@ -4,7 +4,7 @@ import { api, statusColors, statusLabels } from "../lib/api";
 import type { Quote, QuoteGroup } from "../lib/types";
 import { fmt, fmtDate } from "../lib/format";
 import { Badge, Card, EmptyState, LinkButton, PageHeader, Spinner, inputCls } from "../components/ui";
-import { ChevronDown, ChevronRight, CheckCircle2, Copy, FilePlus2, Files, Folder, Pencil, Search, SearchX } from "lucide-react";
+import { ChevronDown, ChevronRight, CheckCircle2, Copy, FilePlus2, Files, Folder, FolderOpen, Pencil, Search, SearchX } from "lucide-react";
 import { cn } from "../lib/cn";
 
 const filters = [
@@ -245,10 +245,11 @@ export default function Quotes() {
             const chosen = list.find((d) => d.id === g.chosen_quote_id);
             return (
               <div key={g.id} className="rounded-2xl border border-line bg-subtle p-3">
-                <button
-                  onClick={() => toggle(g.id)}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
-                >
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggle(g.id)}
+                    className="flex flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
+                  >
                   {isCollapsed ? (
                     <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
                   ) : (
@@ -275,8 +276,16 @@ export default function Quotes() {
                       {" "}· {fmt(total)}
                       {chosen ? ` · retenu : ${chosen.number}` : ""}
                     </div>
-                  </div>
-                </button>
+                    </div>
+                  </button>
+                  <Link
+                    to={`/dossiers/${g.id}`}
+                    title="Vue combinée du dossier (devis + factures)"
+                    className="mr-1 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line-2 px-2.5 py-1.5 text-xs font-medium text-ink-2 transition hover:bg-hover"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Vue du dossier</span>
+                  </Link>
+                </div>
                 {!isCollapsed && (
                   <div className="mt-2 space-y-2">
                     {list.map((q) => (
