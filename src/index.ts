@@ -3,6 +3,7 @@ import pg from "pg";
 import { attachDatabasePool } from "@neon/functions";
 import PDFDocument from "pdfkit";
 import { registerCockpit } from "./cockpit.js";
+import { syncPaymentTransaction, removePaymentTransaction } from "./bank-sync.js";
 import { loadAppSettings, resolveRecipient } from "./settings.js";
 import { buildFacturxXml, facturxXmp } from "./facturx.js";
 
@@ -1808,6 +1809,14 @@ app.post("/api/invoices/:id/payments", async (c) => {
      VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     [id, amount, b.method || "", b.date || new Date().toISOString().slice(0, 10), b.note || ""],
   );
+  /* Synchronisation Tresorerie : un encaissement cree un mouvement bancaire (entree). */
+  await syncPaymentTransaction(
+    pool,
+    rows[0],
+    inv.number,
+    inv.client?.id ?? inv.client_id ?? null,
+    b.account_id ? Number(b.account_id) : null,
+  );
   const paidAfter = money(inv.paid + amount);
   const remainingAfter = money(Math.max(Number(inv.total_ttc) - paidAfter, 0));
   const status = remainingAfter <= 0 ? "paid" : "partial";
@@ -1822,6 +1831,9 @@ app.delete("/api/invoices/:id/payments/:pid", async (c) => {
   if (!inv) return c.json({ error: "Facture introuvable" }, 404);
   const { rowCount } = await pool.query("DELETE FROM payments WHERE id = $1 AND invoice_id = $2", [pid, id]);
   if (!rowCount) return c.json({ error: "Règlement introuvable" }, 404);
+  /* Retire le mouvement bancaire genere pour ce reglement (l'ON DELETE CASCADE le
+     fait aussi, cette suppression explicite garantit la synchro meme sans elle). */
+  await removePaymentTransaction(pool, pid);
   const payments = await listPayments(id);
   const paid = money(payments.reduce((s, p) => s + Number(p.amount), 0));
   const status = paid <= 0 ? "unpaid" : "partial";

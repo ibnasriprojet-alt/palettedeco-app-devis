@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, BASE, statusColors, statusLabels } from "../lib/api";
 import type { Client, Company, Invoice, Payment, Quote } from "../lib/types";
+import type { BankAccount } from "../lib/cockpit-types";
 import { fmt, fmtDate, money, round2, today } from "../lib/format";
 import { Badge, Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
 import { ArrowLeft, Download, FileText, Folder, Link2, Mail, MessageCircle, Plus, Printer, Share2, Trash2 } from "lucide-react";
@@ -26,7 +27,8 @@ export default function DocumentView({ kind }: { kind: Kind }) {
   const [shareMsg, setShareMsg] = useState("");
   const [shareUrl, setShareUrl] = useState("");
   const [waMsg, setWaMsg] = useState("");
-  const [payForm, setPayForm] = useState({ amount: "", method: "Virement", date: today(), note: "" });
+  const [payForm, setPayForm] = useState({ amount: "", method: "Virement", date: today(), note: "", account_id: "" as number | "" });
+  const [payAccounts, setPayAccounts] = useState<BankAccount[]>([]);
 
   const isQuote = kind === "quote";
   const isInvoice = kind === "invoice";
@@ -44,7 +46,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     setShareUrl("");
     setWaMsg("");
     setInvoiceNumber("");
-    setPayForm({ amount: "", method: "Virement", date: today(), note: "" });
+    setPayForm((f) => ({ amount: "", method: "Virement", date: today(), note: "", account_id: f.account_id }));
     let alive = true;
     Promise.all([
       api.getCompany(),
@@ -71,6 +73,21 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     setEmailTo(doc?.client?.email || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.client?.email]);
+
+  /* Comptes bancaires pour rattacher un encaissement a la bonne tresorerie. */
+  useEffect(() => {
+    if (!isInvoice) return;
+    api
+      .getBankAccounts()
+      .then((r) => {
+        const items = r.items || [];
+        setPayAccounts(items);
+        const def = items.find((a) => a.is_default) || items[0];
+        if (def) setPayForm((f) => (f.account_id === "" ? { ...f, account_id: def.id } : f));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInvoice]);
 
   const byRate = useMemo(() => {
     const m: Record<string, { rate: number; base: number; tva: number }> = {};
@@ -231,8 +248,9 @@ export default function DocumentView({ kind }: { kind: Kind }) {
         method: payForm.method || "Virement",
         date: payForm.date || today(),
         note: payForm.note,
+        account_id: payForm.account_id === "" ? null : payForm.account_id,
       });
-      setPayForm({ amount: "", method: payForm.method, date: payForm.date, note: "" });
+      setPayForm({ amount: "", method: payForm.method, date: payForm.date, note: "", account_id: payForm.account_id });
       await reloadDoc();
     } catch (e) {
       setError((e as Error).message);
@@ -693,6 +711,22 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   <Field label="Note" className="flex-1">
                     <input className={inputCls} value={payForm.note} onChange={(e) => setPayForm({ ...payForm, note: e.target.value })} placeholder="Acompte, avantage..." />
                   </Field>
+                  {payAccounts.length > 0 && (
+                    <Field label="Compte encaissé" className="flex-1">
+                      <select
+                        className={inputCls}
+                        value={payForm.account_id}
+                        onChange={(e) => setPayForm({ ...payForm, account_id: e.target.value ? Number(e.target.value) : "" })}
+                      >
+                        <option value="">— Aucun compte —</option>
+                        {payAccounts.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  )}
                   <Button onClick={addPayment} disabled={!Number(payForm.amount) || Number(payForm.amount) <= 0}>
                     <Plus className="h-4 w-4" /> Ajouter
                   </Button>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, Landmark, Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Landmark, Lock, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { api } from "../lib/api";
 import type { BankAccount, BankTransaction } from "../lib/cockpit-types";
 import { TX_KINDS } from "../lib/cockpit-types";
@@ -199,6 +199,11 @@ export default function Cash() {
                       <td className="px-4 py-2.5">
                         <span className="font-medium">{t.label || "—"}</span>
                         {t.invoice_number && <div className="text-xs text-ink-4">{t.invoice_number}</div>}
+                        {(t.expense_id || t.payment_id) && (
+                          <span className="ml-2 rounded border border-brand-line bg-brand-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-2">
+                            auto
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-ink-3">{TX_KINDS.find((k) => k.id === t.kind)?.label || t.kind}</td>
                       <td className="hidden px-4 py-2.5 text-ink-4 sm:table-cell">{t.account_name || "—"}</td>
@@ -212,13 +217,22 @@ export default function Cash() {
                         {eur(t.amount)}
                       </td>
                       <td className="px-2 py-2.5">
-                        <button
-                          onClick={() => setToDelete(t)}
-                          className="rounded p-1 text-ink-4 transition hover:bg-danger-soft hover:text-danger"
-                          aria-label="Supprimer le mouvement"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {t.expense_id || t.payment_id ? (
+                          <span
+                            className="block rounded p-1 text-ink-4"
+                            title="Mouvement généré automatiquement depuis une dépense ou un encaissement : modifiez ou supprimez la source."
+                          >
+                            <Lock className="h-4 w-4" />
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => setToDelete(t)}
+                            className="rounded p-1 text-ink-4 transition hover:bg-danger-soft hover:text-danger"
+                            aria-label="Supprimer le mouvement"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

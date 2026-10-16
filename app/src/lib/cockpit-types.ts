@@ -68,6 +68,7 @@ export type BankTransaction = {
   invoice_id: number | null;
   invoice_number?: string | null;
   expense_id: number | null;
+  payment_id?: number | null;
   expense_label?: string | null;
   expense_supplier?: string | null;
   reference: string;

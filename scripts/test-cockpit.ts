@@ -105,6 +105,18 @@ const created = await call("POST", "/api/expenses", {
 check("POST /api/expenses cree la depense", created.status === 201, `recu ${created.status}`);
 check("TTC calcule automatiquement (1200)", Number(created.json?.amount_ttc) === 1200, `recu ${created.json?.amount_ttc}`);
 
+/* Synchronisation Tresorerie : la depense doit generer un mouvement bancaire. */
+const txAuto = await call("GET", "/api/transactions?from=2020-01-01&to=2030-12-31");
+const autoTx = (txAuto.json?.items || []).find((t: any) => t.expense_id === created.json.id);
+check("une depense cree un mouvement bancaire automatique", !!autoTx, "aucun mouvement lie");
+check(
+  "mouvement auto : sortie du bon montant (1200)",
+  autoTx && autoTx.direction === "out" && Number(autoTx.amount) === 1200,
+  `${autoTx?.direction} ${autoTx?.amount}`,
+);
+check("mouvement auto : kind = expense", autoTx?.kind === "expense", `${autoTx?.kind}`);
+check("mouvement auto : compte repris de la depense (null)", autoTx && autoTx.account_id === null, `${autoTx?.account_id}`);
+
 const noSupplier = await call("POST", "/api/expenses", { amount_ht: 10 });
 check("POST sans fournisseur refuse", noSupplier.status === 400, `recu ${noSupplier.status}`);
 
@@ -118,10 +130,20 @@ check("recherche fournisseur fonctionne", searched.json?.items?.length === 1, `$
 const updated = await call("PUT", `/api/expenses/${created.json.id}`, { amount_ht: 500 });
 check("PUT recalcule le TTC (600)", Number(updated.json?.amount_ttc) === 600, `recu ${updated.json?.amount_ttc}`);
 
+const txAuto2 = await call("GET", "/api/transactions?from=2020-01-01&to=2030-12-31");
+const autoTx2 = (txAuto2.json?.items || []).find((t: any) => t.expense_id === created.json.id);
+check("modifier la depense met a jour le mouvement (600)", autoTx2 && Number(autoTx2.amount) === 600, `recu ${autoTx2?.amount}`);
+
 console.log("\n=== 4. Tresorerie ===");
 /* Rejouabilite : on archive les comptes et comptes de test deja presents
-   (ils ne sont pas supprimes, on ne fait donc aucune ecriture destructive). */
-for (const a of (await call("GET", "/api/bank-accounts")).json?.items || []) {
+   (ils ne sont pas supprimes, on ne fait donc aucune ecriture destructive).
+   On memorise leur etat initial pour le restaurer a la fin : sans cela, lancer
+   les tests archivait pour de bon le vrai compte bancaire de l'utilisateur. */
+const accountsBefore = ((await call("GET", "/api/bank-accounts")).json?.items || []) as Array<{
+  id: number;
+  is_default: boolean;
+}>;
+for (const a of accountsBefore) {
   await call("PUT", `/api/bank-accounts/${a.id}`, { archived: true });
 }
 const cash0 = await call("GET", "/api/cash?from=2026-01-01&to=2026-12-31");
@@ -136,6 +158,10 @@ const acct = await call("POST", "/api/bank-accounts", {
 });
 check("POST /api/bank-accounts cree le compte", acct.status === 201, `recu ${acct.status}`);
 
+const sumsBefore = (await call("GET", "/api/transactions?from=2026-01-01&to=2026-12-31")).json?.total || {
+  entries: 0,
+  exits: 0,
+};
 const tx = await call("POST", "/api/transactions", {
   account_id: acct.json.id, tx_date: "2026-09-20", label: "Virement recu",
   amount: 1200, direction: "in", kind: "payment",
@@ -144,7 +170,7 @@ check("POST /api/transactions enregistre une entree", tx.status === 201, `recu $
 
 const txOut = await call("POST", "/api/transactions", {
   account_id: acct.json.id, tx_date: "2026-09-21", label: "Achat bois",
-  amount: 300, direction: "out", kind: "expense", expense_id: created.json.id,
+  amount: 300, direction: "out", kind: "expense",
 });
 check("POST /api/transactions enregistre une sortie", txOut.status === 201, `recu ${txOut.status}`);
 
@@ -160,13 +186,25 @@ check(
   `recu ${cash1.json?.total}`,
 );
 
+/* Les agregats sont globaux (non filtres par compte) : on verifie la variation
+   provoquee par nos deux mouvements, insensible aux donnees deja presentes. */
 const txs = await call("GET", "/api/transactions?from=2026-01-01&to=2026-12-31");
-check("aggregat entrees = 1200", Number(txs.json?.total?.entries) === 1200, `recu ${txs.json?.total?.entries}`);
-check("aggregat sorties = 300", Number(txs.json?.total?.exits) === 300, `recu ${txs.json?.total?.exits}`);
-
-const blocked = await call("DELETE", `/api/expenses/${created.json.id}`);
 check(
-  "depense liee a un mouvement : suppression refusee (409)",
+  "aggregat entrees = +1200",
+  Number(txs.json?.total?.entries) === Number(sumsBefore.entries) + 1200,
+  `recu ${txs.json?.total?.entries} (avant ${sumsBefore.entries})`,
+);
+check(
+  "aggregat sorties = +300",
+  Number(txs.json?.total?.exits) === Number(sumsBefore.exits) + 300,
+  `recu ${txs.json?.total?.exits} (avant ${sumsBefore.exits})`,
+);
+
+/* Un mouvement genere automatiquement ne se supprime pas directement : il faut
+   supprimer la depense (source) pour rester synchrone. */
+const blocked = await call("DELETE", `/api/transactions/${autoTx?.id}`);
+check(
+  "mouvement auto : suppression directe refusee (409)",
   blocked.status === 409,
   `recu ${blocked.status}`,
 );
@@ -606,11 +644,33 @@ console.log("\n=== 8. Suppression des donnees de test ===");
 await call("DELETE", `/api/transactions/${txOut.json.id}`);
 await call("DELETE", `/api/transactions/${tx.json.id}`);
 const delExp = await call("DELETE", `/api/expenses/${created.json.id}`);
-check("depense detachee : suppression acceptee", delExp.status === 200, `recu ${delExp.status}`);
+check("supprimer la depense est accepte", delExp.status === 200, `recu ${delExp.status}`);
+
+/* La suppression de la depense doit aussi retirer le mouvement qu'elle a genere. */
+const txAfterExp = await call("GET", "/api/transactions?from=2020-01-01&to=2030-12-31");
+check(
+  "supprimer la depense retire son mouvement auto",
+  !(txAfterExp.json?.items || []).some((t: any) => t.expense_id === created.json.id),
+  "mouvement auto residuel",
+);
 
 await call("PUT", `/api/bank-accounts/${acct.json.id}`, { archived: true });
 const cashFinal = await call("GET", "/api/cash?from=2026-01-01&to=2026-12-31");
 check("apres nettoyage, aucun compte actif", cashFinal.json?.has_accounts === false, `${cashFinal.json?.has_accounts}`);
+
+/* Restauration de l'etat initial des comptes bancaires de l'utilisateur. */
+for (const a of accountsBefore.filter((a) => !a.is_default)) {
+  await call("PUT", `/api/bank-accounts/${a.id}`, { archived: false });
+}
+for (const a of accountsBefore.filter((a) => a.is_default)) {
+  await call("PUT", `/api/bank-accounts/${a.id}`, { archived: false, is_default: true });
+}
+const restored = (await call("GET", "/api/bank-accounts")).json?.items || [];
+check(
+  "comptes bancaires de l'utilisateur restaures (actifs)",
+  accountsBefore.every((a: any) => restored.some((r: any) => r.id === a.id)),
+  `restaures=${restored.map((r: any) => r.id).join(",")}`,
+);
 
 const final = await call("GET", "/api/expenses?from=2020-01-01&to=2030-12-31");
 check("compteur de depenses revenu au valeur initiale", (final.json?.total?.count ?? 0) === countBefore, `${final.json?.total?.count} vs ${countBefore}`);

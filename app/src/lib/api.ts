@@ -223,7 +223,7 @@ export const api = {
   setInvoiceStatus: (id: number, status: InvoiceStatus) =>
     request<Invoice>(`/api/invoices/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
   deleteInvoice: (id: number) => request<{ ok: boolean }>(`/api/invoices/${id}`, { method: "DELETE" }),
-  addPayment: (id: number, p: { amount: string | number; method: string; date: string; note: string }) =>
+  addPayment: (id: number, p: { amount: string | number; method: string; date: string; note: string; account_id?: number | null }) =>
     request<{ payment: Payment; status: InvoiceStatus; paid: number; remaining: number }>(
       `/api/invoices/${id}/payments`,
       { method: "POST", body: JSON.stringify(p) },

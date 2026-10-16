@@ -9,6 +9,7 @@ import type pg from "pg";
 import { loadAppSettings, resolveRecipient, DEFAULT_SETTINGS, type AppSettings } from "./settings.js";
 import { DEFAULT_REMINDER_TEMPLATES, type ReminderTemplate } from "./reminder-templates.js";
 import { buildFacturxXml, type FxInvoice } from "./facturx.js";
+import { syncExpenseTransaction, removeExpenseTransaction } from "./bank-sync.js";
 import type { Hono } from "hono";
 
 type Ctx = {
@@ -141,6 +142,7 @@ export function registerCockpit(deps: Deps) {
         b.payment_method || "virement", !!b.deductible_tva, b.notes || "",
       ],
     );
+    await syncExpenseTransaction(pool, rows[0]);
     return c.json(rows[0], 201);
   });
 
@@ -174,15 +176,15 @@ export function registerCockpit(deps: Deps) {
       [...values, id],
     );
     if (!rows.length) return c.json({ error: "Dépense introuvable" }, 404);
+    await syncExpenseTransaction(pool, rows[0]);
     return c.json(rows[0]);
   });
 
+  /* La suppression d'une depense supprime aussi le mouvement bancaire qu'elle a
+     genere : les deux ecrans restent synchronises. */
   app.delete("/api/expenses/:id", async (c) => {
     const id = Number(c.req.param("id"));
-    const used = await pool.query("SELECT 1 FROM bank_transactions WHERE expense_id = $1 LIMIT 1", [id]);
-    if (used.rows.length) {
-      return c.json({ error: "Cette dépense est rattachée à un mouvement bancaire : supprimez d'abord le mouvement." }, 409);
-    }
+    await removeExpenseTransaction(pool, id);
     const { rows } = await pool.query("DELETE FROM expenses WHERE id = $1 RETURNING id", [id]);
     if (!rows.length) return c.json({ error: "Dépense introuvable" }, 404);
     return c.json({ ok: true, id });
@@ -294,11 +296,19 @@ export function registerCockpit(deps: Deps) {
   });
 
   app.delete("/api/transactions/:id", async (c) => {
-    const { rows } = await pool.query("DELETE FROM bank_transactions WHERE id = $1 RETURNING id", [
-      Number(c.req.param("id")),
-    ]);
-    if (!rows.length) return c.json({ error: "Mouvement introuvable" }, 404);
-    return c.json({ ok: true, id: rows[0].id });
+    const id = Number(c.req.param("id"));
+    const cur = await pool.query("SELECT expense_id, payment_id FROM bank_transactions WHERE id = $1", [id]);
+    if (!cur.rows.length) return c.json({ error: "Mouvement introuvable" }, 404);
+    /* Les mouvements generes automatiquement ne se suppriment pas directement :
+       il faut supprimer leur source (depense ou encaissement) pour rester synchrone. */
+    if (cur.rows[0].expense_id || cur.rows[0].payment_id) {
+      return c.json(
+        { error: "Mouvement genere automatiquement (depense ou encaissement) : modifiez ou supprimez la source." },
+        409,
+      );
+    }
+    await pool.query("DELETE FROM bank_transactions WHERE id = $1", [id]);
+    return c.json({ ok: true, id });
   });
 
   /* ================= Tresorerie : soldes ================= */
