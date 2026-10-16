@@ -29,12 +29,11 @@ import { cn } from "../lib/cn";
 
 const tvaRates = ["20", "10", "5.5", "2.1", "0"];
 
-export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "order" }) {
+export default function QuoteEditor() {
   const { id } = useParams();
   const editId = id ? Number(id) : null;
   const navigate = useNavigate();
-  const isQuote = kind === "quote";
-  const listPath = isQuote ? "/quotes" : "/orders";
+  const listPath = "/quotes";
 
   const [company, setCompany] = useState<Company | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -98,7 +97,7 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
       }
       if (editId) {
         try {
-          const q = await (isQuote ? api.getQuote(editId) : api.getOrder(editId));
+          const q = await api.getQuote(editId);
           setNumber(q.number);
           setClientId(q.client_id || "");
           setStatus(q.status);
@@ -114,15 +113,13 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
           );
           setPhotos(Array.isArray(q.photos) ? q.photos : []);
           setInvoiced(q.status === "invoiced");
-          if (isQuote) {
-            const qq = q as Quote;
-            setSigned(!!qq.signed);
-            setSignedAt(qq.signed_at || null);
-            setSignedBy(Array.isArray(qq.signed_by) ? qq.signed_by : []);
-            setSignatureMention(qq.signature_mention || "");
-            setGroupSel(qq.group_id ? String(qq.group_id) : "");
-            setNewGroupName("");
-          }
+          const qq = q as Quote;
+          setSigned(!!qq.signed);
+          setSignedAt(qq.signed_at || null);
+          setSignedBy(Array.isArray(qq.signed_by) ? qq.signed_by : []);
+          setSignatureMention(qq.signature_mention || "");
+          setGroupSel(qq.group_id ? String(qq.group_id) : "");
+          setNewGroupName("");
           setError("");
           hydratedRef.current = true;
           skipRef.current = true;
@@ -152,12 +149,11 @@ export default function QuoteEditor({ kind = "quote" }: { kind?: "quote" | "orde
     }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId, isQuote]);
+  }, [editId]);
 
   useEffect(() => {
-    if (!isQuote) return;
     api.getQuoteGroups().then(setGroups).catch(() => {});
-  }, [isQuote]);
+  }, []);
 
   /* Un dossier appartient a un seul client : on ne propose que ceux du client
      selectionne (ou ceux encore sans client). */
@@ -289,11 +285,7 @@ function addLine() {
         is_block: !!it.is_block,
       })),
       photos,
-      ...(isQuote
-        ? {
-            group_id: groupSel === "__new__" ? undefined : groupSel ? Number(groupSel) : null,
-          }
-        : {}),
+      group_id: groupSel === "__new__" ? undefined : groupSel ? Number(groupSel) : null,
     };
   }
 
@@ -308,7 +300,7 @@ function addLine() {
     setAutoState("saving");
     setAutoError("");
     try {
-      await (isQuote ? api.updateQuote(editId, payload) : api.updateOrder(editId, payload));
+      await api.updateQuote(editId, payload);
       setAutoState(pendingRef.current ? "saving" : "saved");
     } catch (e) {
       setAutoError((e as Error).message);
@@ -336,7 +328,7 @@ function addLine() {
       if (timerRef.current) window.clearTimeout(timerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, isQuote, groupSel]);
+  }, [number, clientId, status, issueDate, validUntil, conditions, notes, items, photos, editId, frozen, groupSel]);
 
   async function save(nextStatus?: QuoteStatus) {
     setSaving(true);
@@ -344,15 +336,9 @@ function addLine() {
     setAutoError("");
     const payload = buildPayload(nextStatus);
     try {
-      const q = editId
-        ? isQuote
-          ? await api.updateQuote(editId, payload)
-          : await api.updateOrder(editId, payload)
-        : isQuote
-          ? await api.createQuote(payload)
-          : await api.createOrder(payload);
+      const q = editId ? await api.updateQuote(editId, payload) : await api.createQuote(payload);
       setSyncedInvoice((q as { synced_invoice_id?: number | null }).synced_invoice_id ?? null);
-      if (isQuote && (q as Quote).group_id) {
+      if ((q as Quote).group_id) {
         setGroupSel(String((q as Quote).group_id));
         setNewGroupName("");
         api.getQuoteGroups().then(setGroups).catch(() => {});
@@ -367,7 +353,7 @@ function addLine() {
   return (
     <div>
       <PageHeader
-        title={editId ? (isQuote ? "Modifier le devis" : "Modifier le bon de commande") : isQuote ? "Nouveau devis" : "Nouveau bon de commande"}
+        title={editId ? "Modifier le devis" : "Nouveau devis"}
         subtitle={editId ? number : "Numéro auto attribué à l'enregistrement (ou saisissez le vôtre)"}
         action={
           <div className="flex items-center gap-2">
@@ -390,14 +376,14 @@ function addLine() {
 
       {frozen && (
         <Card className="mb-4 border-brand-line bg-brand-soft text-brand-2">
-          {isQuote ? "Ce devis" : "Ce bon de commande"} est en lecture seule.{" "}
+          Ce devis est en lecture seule.{" "}
           <Link to={`${listPath}/${editId}/view`} className="underline">Voir l'aperçu</Link>
         </Card>
       )}
 
       {invoiced && (
         <Card className="mb-4 border-brand-line bg-brand-soft text-brand-2">
-          {isQuote ? "Ce devis" : "Ce bon de commande"} a été facturé : les modifications sont appliquées automatiquement à la facture liée.{" "}
+          Ce devis a été facturé : les modifications sont appliquées automatiquement à la facture liée.{" "}
           <Link to={`${listPath}/${editId}/view`} className="underline">Voir l'aperçu</Link>
         </Card>
       )}
@@ -423,7 +409,7 @@ function addLine() {
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
           <div className="space-y-4">
             <Card>
-              <h2 className="mb-3 font-semibold text-ink">{isQuote ? "Informations du devis" : "Informations du bon de commande"}</h2>
+              <h2 className="mb-3 font-semibold text-ink">Informations du devis</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Client">
                   <select
@@ -441,7 +427,7 @@ function addLine() {
                 <Field label="Numéro (vide = auto)">
                   <input
                     className={inputCls}
-                    placeholder={isQuote ? "Ex : DEV-2026-001" : "Ex : BC-2026-001"}
+                    placeholder="Ex : DEV-2026-001"
                     value={number}
                     disabled={frozen}
                     onChange={(e) => setNumber(e.target.value)}
@@ -457,11 +443,10 @@ function addLine() {
                 <Field label="Date d'émission">
                   <input type="date" className={inputCls} value={issueDate} disabled={frozen} onChange={(e) => setIssueDate(e.target.value)} />
                 </Field>
-                <Field label={isQuote ? "Date de validité" : "Date de livraison prévue"}>
+                <Field label="Date de validité">
                   <input type="date" className={inputCls} value={validUntil} disabled={frozen} onChange={(e) => setValidUntil(e.target.value)} />
                 </Field>
-                {isQuote && (
-                  <div className="sm:col-span-2">
+                <div className="sm:col-span-2">
                     <Field label="Dossier (variantes du même produit)">
                       <div className="flex flex-col gap-2 sm:flex-row">
                         <select
@@ -522,7 +507,6 @@ function addLine() {
                         : "Regroupez ici les 2-3 variantes d'un même produit. Depuis la liste des devis, désignez la variante choisie par le client : les autres passeront en « refusé »."}
                     </p>
                   </div>
-                )}
               </div>
             </Card>
 
@@ -537,7 +521,7 @@ function addLine() {
                 )}
               </div>
               <p className="mb-3 text-xs text-ink-4">
-                {isQuote ? "Ces photos apparaissent sur le devis (PDF et email)." : "Ces photos apparaissent sur le bon de commande (PDF et email)."} Maximum {MAX_PHOTOS} images.
+                Ces photos apparaissent sur le devis (PDF et email). Maximum {MAX_PHOTOS} images.
               </p>
               {photos.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-line-2 py-8 text-center text-sm text-ink-4">
@@ -714,7 +698,7 @@ function addLine() {
               </div>
             </Card>
 
-            {isQuote && editId && (
+            {editId && (
               <SignatureCard
                 key={editId}
                 quoteId={editId}
@@ -756,7 +740,7 @@ function addLine() {
                   <Printer className="h-4 w-4" /> Aperçu / PDF
                 </Link>
               )}
-              {isQuote && editId && !frozen && (
+              {editId && !frozen && (
                 <Button
                   variant="ghost"
                   className="w-full"
@@ -784,12 +768,11 @@ function addLine() {
                   disabled={deleting}
                   onClick={async () => {
                     if (deleting) return;
-                    if (!confirm(isQuote ? "Supprimer ce devis ?" : "Supprimer ce bon de commande ?")) return;
+                    if (!confirm("Supprimer ce devis ?")) return;
                     setDeleting(true);
                     setError("");
                     try {
-                      if (isQuote) await api.deleteQuote(editId);
-                      else await api.deleteOrder(editId);
+                      await api.deleteQuote(editId);
                       navigate(listPath);
                     } catch (e) {
                       /* sans catch : erreur silencieuse et l'utilisateur reclique */

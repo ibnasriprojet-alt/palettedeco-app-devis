@@ -4,7 +4,6 @@ import AuthGate from "./components/AuthGate";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Dashboard from "./pages/Dashboard";
 import Quotes from "./pages/Quotes";
-import Orders from "./pages/Orders";
 import QuoteEditor from "./pages/QuoteEditor";
 import DocumentView from "./pages/DocumentView";
 import Clients from "./pages/Clients";
@@ -33,13 +32,9 @@ export default function App() {
                 <Route element={<Layout />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/quotes" element={<Quotes />} />
-                  <Route path="/quotes/new" element={<QuoteEditor kind="quote" />} />
-                  <Route path="/quotes/:id" element={<QuoteEditor kind="quote" />} />
+                  <Route path="/quotes/new" element={<QuoteEditor />} />
+                  <Route path="/quotes/:id" element={<QuoteEditor />} />
                   <Route path="/quotes/:id/view" element={<DocumentView kind="quote" />} />
-                  <Route path="/orders" element={<Orders />} />
-                  <Route path="/orders/new" element={<QuoteEditor kind="order" />} />
-                  <Route path="/orders/:id" element={<QuoteEditor kind="order" />} />
-                  <Route path="/orders/:id/view" element={<DocumentView kind="order" />} />
                   <Route path="/clients" element={<Clients />} />
                   <Route path="/clients/new" element={<ClientForm />} />
                   <Route path="/clients/:id" element={<ClientForm />} />

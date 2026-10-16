@@ -59,7 +59,6 @@ export interface QuoteItem {
 }
 
 export type QuoteStatus = "draft" | "sent" | "accepted" | "declined" | "invoiced";
-export type OrderStatus = QuoteStatus;
 export type InvoiceStatus = "unpaid" | "paid" | "partial";
 
 export interface DocPayload {
@@ -134,24 +133,6 @@ export interface SignedBy {
   image: string;
 }
 
-export interface Order {
-  id: number;
-  number: string;
-  client_id: number | null;
-  status: OrderStatus;
-  issue_date: string;
-  valid_until: string;
-  conditions: string;
-  notes: string;
-  total_ht: string | number;
-  total_tva: string | number;
-  total_ttc: string | number;
-  items: QuoteItem[];
-  photos?: string[];
-  client?: Client | null;
-  synced_invoice_id?: number | null;
-}
-
 export interface InvoiceItem {
   id?: number;
   description: string;
@@ -201,7 +182,6 @@ export interface Invoice {
 
 export interface ClientHistory {
   quotes: Array<{ id: number; number: string; status: QuoteStatus; issue_date: string; valid_until: string; total_ttc: number }>;
-  orders: Array<{ id: number; number: string; status: OrderStatus; issue_date: string; valid_until: string; total_ttc: number }>;
   invoices: Array<{ id: number; number: string; status: InvoiceStatus; issue_date: string; due_date: string; total_ttc: number; paid: number }>;
 }
 

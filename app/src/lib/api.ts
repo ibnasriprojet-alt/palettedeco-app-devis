@@ -1,4 +1,4 @@
-import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Order, OrderStatus, Payment, Quote, QuoteGroup, QuoteStatus, Signatory, Stats } from "./types";
+import type { Client, ClientHistory, Company, Invoice, InvoiceStatus, Payment, Quote, QuoteGroup, QuoteStatus, Signatory, Stats } from "./types";
 import type {
   AppSettings, BankAccount, BankTransaction, ComplianceCheck, Expense, ExpenseInput, Kpi,
   ReminderLog, ReminderPreview, ReminderTarget, ReminderTemplate,
@@ -217,16 +217,6 @@ export const api = {
   setInvoiceGroup: (id: number, g: { group_id?: number | null; group_name?: string }) =>
     request<Invoice>(`/api/invoices/${id}/group`, { method: "PUT", body: JSON.stringify(g) }),
 
-  getOrders: () => request<Order[]>(`/api/orders`),
-  getOrder: (id: number) => request<Order>(`/api/orders/${id}`),
-  createOrder: (o: Partial<Order>) => request<Order>("/api/orders", { method: "POST", body: JSON.stringify(o) }),
-  updateOrder: (id: number, o: Partial<Order>) =>
-    request<Order>(`/api/orders/${id}`, { method: "PUT", body: JSON.stringify(o) }),
-  setOrderStatus: (id: number, status: OrderStatus) =>
-    request<Order>(`/api/orders/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
-  deleteOrder: (id: number) => request<{ ok: boolean }>(`/api/orders/${id}`, { method: "DELETE" }),
-  convertOrder: (id: number, number?: string) =>
-    request<Invoice>(`/api/orders/${id}/convert`, { method: "POST", body: JSON.stringify({ number: number || "" }) }),
 
   getInvoices: () => request<Invoice[]>("/api/invoices"),
   getInvoice: (id: number) => request<Invoice>(`/api/invoices/${id}`),
@@ -253,13 +243,13 @@ export const api = {
       { method: "POST", body: JSON.stringify({ sig, email }) },
     ),
 
-  sendDocument: (type: "quote" | "invoice" | "order", id: number, to: string, copy = false) =>
+  sendDocument: (type: "quote" | "invoice", id: number, to: string, copy = false) =>
     request<{ ok: boolean }>("/api/send-document", { method: "POST", body: JSON.stringify({ type, id, to, copy }) }),
 
-  getPublicPdfUrl: (type: "quote" | "invoice" | "order", id: number) =>
+  getPublicPdfUrl: (type: "quote" | "invoice", id: number) =>
     request<{ url: string }>(`/api/pdf-url/${type}/${id}`),
 
-  downloadPdf: async (type: "quote" | "invoice" | "order", id: number, number?: string): Promise<{ url: string; filename: string }> => {
+  downloadPdf: async (type: "quote" | "invoice", id: number, number?: string): Promise<{ url: string; filename: string }> => {
     const sess = getSession();
     const headers: Record<string, string> = {};
     if (sess) headers["X-Session"] = sess;
@@ -276,7 +266,7 @@ export const api = {
     }
     const disposition = res.headers.get("Content-Disposition") || "";
     const m = disposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
-    const label = type === "invoice" ? "Facture" : type === "order" ? "Bon-de-commande" : "Devis";
+    const label = type === "invoice" ? "Facture" : "Devis";
     const fallback = number ? `${label} ${number}` : `${type}-${id}`;
     const blob = await res.blob();
     const name = (m?.[1] || fallback).trim();

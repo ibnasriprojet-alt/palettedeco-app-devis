@@ -6,7 +6,6 @@ import {
   FilePlus2,
   FileText,
   Folder,
-  ClipboardList,
   Users,
   ReceiptText,
   Settings,
@@ -27,7 +26,6 @@ import { api } from "../lib/api";
 const navItems = [
   { to: "/", label: "Tableau de bord", short: "Bord", icon: LayoutDashboard },
   { to: "/quotes", label: "Devis", short: "Devis", icon: FileText },
-  { to: "/orders", label: "Commandes", short: "Cmd", icon: ClipboardList },
   { to: "/invoices", label: "Factures", short: "Fact.", icon: ReceiptText },
   { to: "/clients", label: "Clients", short: "Clients", icon: Users },
   { to: "/dossiers", label: "Dossiers", short: "Doss.", icon: Folder },

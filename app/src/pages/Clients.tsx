@@ -149,27 +149,6 @@ export default function Clients() {
               )}
             </div>
             <div>
-              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Bons de commande ({hist.orders.length})</h4>
-              {hist.orders.length === 0 ? (
-                <p className="text-sm text-ink-4">Aucun bon de commande.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {hist.orders.map((o) => (
-                    <Link key={o.id} to={`/orders/${o.id}/view`} onClick={() => setHistClient(null)} className="flex items-center justify-between gap-2 rounded-lg bg-subtle px-3 py-2 text-sm hover:bg-hover">
-                      <div>
-                        <div className="font-medium text-ink">{o.number}</div>
-                        <div className="text-xs text-ink-4">Émis le {fmtDate(o.issue_date)}</div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="font-medium text-ink">{fmt(o.total_ttc)}</span>
-                        <Badge className={statusColors[o.status]}>{statusLabels[o.status]}</Badge>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-3">Factures ({hist.invoices.length})</h4>
               {hist.invoices.length === 0 ? (
                 <p className="text-sm text-ink-4">Aucune facture.</p>

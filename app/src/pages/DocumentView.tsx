@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api, BASE, statusColors, statusLabels } from "../lib/api";
-import type { Client, Company, Invoice, Order, Payment, Quote } from "../lib/types";
+import type { Client, Company, Invoice, Payment, Quote } from "../lib/types";
 import { fmt, fmtDate, money, round2, today } from "../lib/format";
 import { Badge, Button, Card, Field, PageHeader, Spinner, inputCls } from "../components/ui";
 import { ArrowLeft, Download, FileText, Folder, Link2, Mail, MessageCircle, Plus, Printer, Share2, Trash2 } from "lucide-react";
 import { cn } from "../lib/cn";
 
-type Kind = "quote" | "invoice" | "order";
+type Kind = "quote" | "invoice";
 
 export default function DocumentView({ kind }: { kind: Kind }) {
   const { id } = useParams();
@@ -15,7 +15,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
   const docId = Number(id);
 
   const [company, setCompany] = useState<Company | null>(null);
-  const [doc, setDoc] = useState<Quote | Invoice | Order | null>(null);
+  const [doc, setDoc] = useState<Quote | Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [converting, setConverting] = useState(false);
@@ -29,7 +29,6 @@ export default function DocumentView({ kind }: { kind: Kind }) {
   const [payForm, setPayForm] = useState({ amount: "", method: "Virement", date: today(), note: "" });
 
   const isQuote = kind === "quote";
-  const isOrder = kind === "order";
   const isInvoice = kind === "invoice";
 
   useEffect(() => {
@@ -49,12 +48,12 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     let alive = true;
     Promise.all([
       api.getCompany(),
-      isQuote ? api.getQuote(docId) : isOrder ? api.getOrder(docId) : api.getInvoice(docId),
+      isQuote ? api.getQuote(docId) : api.getInvoice(docId),
     ])
       .then(([com, d]) => {
         if (!alive) return;
         setCompany(com);
-        setDoc(d as Quote | Invoice | Order);
+        setDoc(d as Quote | Invoice);
       })
       .catch((e) => {
         if (alive) setError((e as Error).message);
@@ -95,10 +94,8 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     try {
       const updated = isQuote
         ? await api.setQuoteStatus(doc.id, status as never)
-        : isOrder
-          ? await api.setOrderStatus(doc.id, status as never)
-          : await api.setInvoiceStatus(doc.id, status as never);
-      setDoc({ ...doc, ...updated } as Quote | Invoice | Order);
+        : await api.setInvoiceStatus(doc.id, status as never);
+      setDoc({ ...doc, ...updated } as Quote | Invoice);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -108,7 +105,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     if (!doc || isInvoice) return;
     setConverting(true);
     try {
-      const inv = isQuote ? await api.convertQuote(doc.id, invoiceNumber) : await api.convertOrder(doc.id, invoiceNumber);
+      const inv = await api.convertQuote(doc.id, invoiceNumber);
       navigate(`/invoices/${inv.id}`);
     } catch (e) {
       setError((e as Error).message);
@@ -119,7 +116,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
   async function downloadPdf() {
     if (!doc) return;
     try {
-      const { url, filename } = await api.downloadPdf(isQuote ? "quote" : isOrder ? "order" : "invoice", doc.id, doc.number);
+      const { url, filename } = await api.downloadPdf(isQuote ? "quote" : "invoice", doc.id, doc.number);
       const a = document.createElement("a");
       a.href = url;
       a.download = filename;
@@ -137,7 +134,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     setEmailMsg(null);
     setError("");
     try {
-      await api.sendDocument(isQuote ? "quote" : isOrder ? "order" : "invoice", doc.id, emailTo.trim(), emailCopy);
+      await api.sendDocument(isQuote ? "quote" : "invoice", doc.id, emailTo.trim(), emailCopy);
       setEmailMsg({ ok: true, text: "E-mail envoyé avec le PDF joint." });
     } catch (e) {
       setEmailMsg({ ok: false, text: (e as Error).message });
@@ -177,7 +174,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
 
   async function publicPdfUrl(): Promise<string> {
     if (!doc) throw new Error("Document introuvable");
-    const { url } = await api.getPublicPdfUrl(isQuote ? "quote" : isOrder ? "order" : "invoice", doc.id);
+    const { url } = await api.getPublicPdfUrl(isQuote ? "quote" : "invoice", doc.id);
     return `${BASE}${url}`;
   }
 
@@ -194,7 +191,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     }
     try {
       const abs = await publicPdfUrl();
-      const label = isQuote ? "devis" : isOrder ? "bon de commande" : "facture";
+      const label = isQuote ? "devis" : "facture";
       const text = `Bonjour,\nvoici votre ${label} ${doc.number} :\n${abs}`;
       win.location.href = `https://wa.me/?text=${encodeURIComponent(text)}`;
       setWaMsg("WhatsApp ouvert — le lien du PDF est dans le message.");
@@ -219,8 +216,8 @@ export default function DocumentView({ kind }: { kind: Kind }) {
 
   async function reloadDoc() {
     if (!doc) return;
-    const fresh = isQuote ? await api.getQuote(doc.id) : isOrder ? await api.getOrder(doc.id) : await api.getInvoice(doc.id);
-    setDoc(fresh as Quote | Invoice | Order);
+    const fresh = isQuote ? await api.getQuote(doc.id) : await api.getInvoice(doc.id);
+    setDoc(fresh as Quote | Invoice);
   }
 
   async function addPayment() {
@@ -280,11 +277,11 @@ export default function DocumentView({ kind }: { kind: Kind }) {
     <div className="print-root">
       <div className="no-print mx-auto mb-4 max-w-5xl">
         <PageHeader
-          title={isQuote ? "Aperçu du devis" : isOrder ? "Aperçu du bon de commande" : "Aperçu de la facture"}
+          title={isQuote ? "Aperçu du devis" : "Aperçu de la facture"}
           subtitle={doc ? doc.number : ""}
           action={
             <div className="flex flex-wrap items-center gap-2">
-              <Link to={isQuote ? "/quotes" : isOrder ? "/orders" : "/invoices"} className="inline-flex items-center gap-1.5 rounded-lg border border-line-2 px-3 py-2 text-sm text-ink hover:bg-hover">
+              <Link to={isQuote ? "/quotes" : "/invoices"} className="inline-flex items-center gap-1.5 rounded-lg border border-line-2 px-3 py-2 text-sm text-ink hover:bg-hover">
                 <ArrowLeft className="h-4 w-4" /> Retour
               </Link>
               <Button variant="dark" onClick={downloadPdf}>
@@ -337,17 +334,15 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`font-display text-3xl font-extrabold tracking-tight ${isQuote ? "text-accent" : isOrder ? "text-accent" : "text-brand-2"}`}>
-                    {isQuote ? "DEVIS" : isOrder ? "BON DE COMMANDE" : "FACTURE"}
+                  <div className={`font-display text-3xl font-extrabold tracking-tight ${isQuote ? "text-accent" : "text-brand-2"}`}>
+                    {isQuote ? "DEVIS" : "FACTURE"}
                   </div>
                   <div className="text-base font-semibold text-ink-3">{doc.number}</div>
                   <div className="mt-2 text-xs text-ink-4">
                     <div>Émis le {fmtDate(doc.issue_date)}</div>
                     {isQuote
                       ? <div>Valide jusqu'au {fmtDate((doc as Quote).valid_until)}</div>
-                      : isOrder
-                        ? <div>Livraison prévue le {fmtDate((doc as Order).valid_until)}</div>
-                        : <div>Échue le {fmtDate((doc as Invoice).due_date)}</div>}
+                      : <div>Échue le {fmtDate((doc as Invoice).due_date)}</div>}
                   </div>
                 </div>
               </div>
@@ -528,7 +523,7 @@ export default function DocumentView({ kind }: { kind: Kind }) {
           <div className="no-print mx-auto mb-8 max-w-5xl">
             <Card className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                {isQuote || isOrder ? (
+                {isQuote ? (
                   <>
                     {["draft", "sent", "accepted", "declined"].map((s) => (
                       <Button
@@ -635,9 +630,9 @@ export default function DocumentView({ kind }: { kind: Kind }) {
                 )}
               </div>
             </Card>
-            {(isQuote || isOrder) && doc.status === "invoiced" && (
+            {isQuote && doc.status === "invoiced" && (
               <div className="mt-3 text-sm text-ink-3">
-                {isQuote ? "Ce devis" : "Ce bon de commande"} a été converti en facture.{" "}
+                Ce devis a été converti en facture.{" "}
                 <Link to="/invoices" className="text-accent underline">Voir les factures</Link>
               </div>
             )}
