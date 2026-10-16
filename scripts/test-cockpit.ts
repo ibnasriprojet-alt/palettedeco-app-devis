@@ -654,7 +654,10 @@ check(
   "mouvement auto residuel",
 );
 
-await call("PUT", `/api/bank-accounts/${acct.json.id}`, { archived: true });
+/* On supprime le compte de test (au lieu de l'archiver) pour ne pas laisser de
+   residu : les comptes precedents s'accumulaient a chaque execution. */
+const delAcct = await call("DELETE", `/api/bank-accounts/${acct.json.id}`);
+check("compte de test supprime", delAcct.status === 200, `recu ${delAcct.status}`);
 const cashFinal = await call("GET", "/api/cash?from=2026-01-01&to=2026-12-31");
 check("apres nettoyage, aucun compte actif", cashFinal.json?.has_accounts === false, `${cashFinal.json?.has_accounts}`);
 
