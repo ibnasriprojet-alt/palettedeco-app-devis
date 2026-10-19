@@ -40,6 +40,10 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
           navigateFallback: "/index.html",
+          /* Les donnees metier (clients, devis, factures, tresorerie)
+             transitent par /api : jamais mises en cache, jamais servies
+             depuis le service worker, meme hors ligne. */
+          navigateFallbackDenylist: [/^\/api\//],
         },
       }),
     ],
