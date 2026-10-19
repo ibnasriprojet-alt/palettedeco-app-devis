@@ -181,7 +181,7 @@ export function KpiBand() {
               const enc = Number(m.encaissements) || 0;
               const dep = Number(m.depenses) || 0;
               return (
-                <div key={m.ym} className="group relative flex flex-1 flex-col items-center justify-end gap-0.5">
+                <div key={m.ym} className="group relative flex min-w-0 flex-1 flex-col items-center justify-end gap-0.5">
                   <div className="absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-lg border border-line bg-surface px-2 py-1 text-xs shadow group-hover:block">
                     <div>{m.ym}</div>
                     <div>CA : {eur(ca)}</div>
@@ -193,7 +193,7 @@ export function KpiBand() {
                     <div className="w-1/3 rounded-t bg-success" style={{ height: `${(enc / maxSerie) * 100}%` }} />
                     <div className="w-1/3 rounded-t bg-brand-2" style={{ height: `${(dep / maxSerie) * 100}%` }} />
                   </div>
-                  <div className="mt-1 text-[9px] capitalize text-ink-4">{m.ym.slice(5)}/{m.ym.slice(2, 4)}</div>
+                  <div className="mt-1 hidden text-[9px] capitalize text-ink-4 sm:block">{m.ym.slice(5)}/{m.ym.slice(2, 4)}</div>
                 </div>
               );
             })}
@@ -226,7 +226,7 @@ export function KpiBand() {
 }
 
 function Card2({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("rounded-xl border border-line bg-surface p-4", className)}>{children}</div>;
+  return <div className={cn("min-w-0 rounded-xl border border-line bg-surface p-4", className)}>{children}</div>;
 }
 
 function Legend({ color, label }: { color: string; label: string }) {

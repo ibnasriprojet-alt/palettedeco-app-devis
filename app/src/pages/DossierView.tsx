@@ -91,7 +91,7 @@ export default function DossierView() {
                 <div
                   key={q.id}
                   className={cn(
-                    "flex items-center justify-between gap-3 rounded-2xl border bg-surface p-4",
+                    "flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-surface p-4",
                     chosen ? "border-success-line" : "border-line",
                   )}
                 >

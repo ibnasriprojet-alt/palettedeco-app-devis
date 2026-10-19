@@ -153,7 +153,7 @@ export default function Settings() {
         <div className="flex justify-center py-20"><Spinner /></div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Card>
               <h2 className="mb-3 font-semibold text-ink">Identité</h2>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -294,7 +294,7 @@ export default function Settings() {
             </Card>
           </div>
 
-          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <div className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start">
             <Card>
               <h2 className="mb-3 font-semibold text-ink">Logo</h2>
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => {

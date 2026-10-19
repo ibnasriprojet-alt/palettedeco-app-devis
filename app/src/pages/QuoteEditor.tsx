@@ -407,7 +407,7 @@ function addLine() {
         )
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Card>
               <h2 className="mb-3 font-semibold text-ink">Informations du devis</h2>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -627,7 +627,7 @@ function addLine() {
                         </>
                       )}
                       {!frozen && (
-                        <div className="mt-1.5 flex items-center gap-1">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
                           <button className={tbtn} disabled={idx === 0} title="Monter" onClick={() => moveItem(idx, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
                           <button className={tbtn} disabled={idx === items.length - 1} title="Descendre" onClick={() => moveItem(idx, 1)}><ArrowDown className="h-3.5 w-3.5" /></button>
                           <span className="mx-1 h-4 w-px bg-hover" />
@@ -673,7 +673,7 @@ function addLine() {
             </Card>
           </div>
 
-          <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <div className="min-w-0 space-y-4 lg:sticky lg:top-4 lg:self-start">
             <Card>
               <h2 className="mb-3 font-semibold text-ink">Totaux</h2>
               <div className="space-y-1.5 text-sm">

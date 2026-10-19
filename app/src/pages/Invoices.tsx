@@ -197,7 +197,7 @@ export default function Invoices() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => toggle(g.id)}
-                    className="flex flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-hover"
                   >
                     {isCollapsed ? (
                       <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" />
