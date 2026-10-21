@@ -18,9 +18,11 @@ import {
   Copy,
   ImagePlus,
   Italic,
+  Loader2,
   Plus,
   Printer,
   Save,
+  Sparkles,
   Trash2,
   Type,
   X,
@@ -64,6 +66,12 @@ export default function QuoteEditor() {
   const [newGroupName, setNewGroupName] = useState("");
   const [groupBusy, setGroupBusy] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [assistBusy, setAssistBusy] = useState<number | null>(null);
+  const [assistModal, setAssistModal] = useState<{
+    idx: number;
+    original: string;
+    suggestion: string;
+  } | null>(null);
 
   const [autoState, setAutoState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [autoError, setAutoError] = useState("");
@@ -506,8 +514,52 @@ function addLine() {
                         ? "Sélectionnez d'abord un client, puis créez le dossier."
                         : "Regroupez ici les 2-3 variantes d'un même produit. Depuis la liste des devis, désignez la variante choisie par le client : les autres passeront en « refusé »."}
                     </p>
-                  </div>
+      </div>
+
+      {assistModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setAssistModal(null)} />
+          <div className="relative w-full max-w-2xl rounded-2xl border border-line bg-surface shadow-soft">
+            <div className="flex items-center justify-between border-b border-line px-5 py-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-brand-2" />
+                <h2 className="font-semibold text-ink">Proposition de correction</h2>
               </div>
+              <button className="rounded-lg p-1 hover:bg-hover" onClick={() => setAssistModal(null)}><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              <div>
+                <div className="mb-1 text-xs uppercase tracking-wide text-ink-4">Version actuelle</div>
+                <div className="whitespace-pre-wrap rounded-xl border border-line bg-subtle px-3 py-2 text-sm text-ink-2">{assistModal.original}</div>
+              </div>
+              <div>
+                <div className="mb-1 text-xs uppercase tracking-wide text-ink-4">Proposition corrigée (orthographe, syntaxe, plus professionnel)</div>
+                <div className="whitespace-pre-wrap rounded-xl border border-line-2 bg-surface-2 px-3 py-2 text-sm text-ink">{assistModal.suggestion}</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line px-5 py-3">
+              <Button variant="ghost" onClick={() => setAssistModal(null)}>Annuler</Button>
+              <Button
+                onClick={async () => {
+                  const idx = assistModal.idx;
+                  const before = assistModal.original;
+                  const after = assistModal.suggestion;
+                  updateItem(idx, { description: after });
+                  setAssistModal(null);
+                  try {
+                    await api.assistLearn(before, after);
+                  } catch {
+                    /* apprentissage best-effort */
+                  }
+                }}
+              >
+                Remplacer
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
             </Card>
 
             <Card>
@@ -638,6 +690,26 @@ function addLine() {
                           <button className={cn(tbtn, it.align === "right" && "bg-hover text-ink")} title="Aligné à droite" onClick={() => updateItem(idx, { align: "right" })}><AlignRight className="h-3.5 w-3.5" /></button>
                           <button className={cn(tbtn, it.is_block && "bg-hover text-ink")} title="Texte libre pleine largeur (titre/section)" onClick={() => updateItem(idx, { is_block: !it.is_block })}><Type className="h-3.5 w-3.5" /></button>
                           <span className="mx-1 h-4 w-px bg-hover" />
+                          <button
+                            className={tbtn}
+                            disabled={frozen || assistBusy === idx || !it.description.trim()}
+                            title="Corriger l'orthographe, la syntaxe et améliorer le style (proposé à validation)"
+                            onClick={async () => {
+                              if (assistBusy === idx || !it.description.trim()) return;
+                              setAssistBusy(idx);
+                              try {
+                                const res = await api.assistRewrite(it.description);
+                                if (!res.changes) return;
+                                setAssistModal({ idx, original: res.original, suggestion: res.suggestion });
+                              } catch (e) {
+                                setError((e as Error).message);
+                              } finally {
+                                setAssistBusy(null);
+                              }
+                            }}
+                          >
+                            {assistBusy === idx ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                          </button>
                           <button className={tbtn + " ml-auto hover:text-danger"} title="Supprimer la ligne" onClick={() => removeLine(idx)}><Trash2 className="h-3.5 w-3.5" /></button>
                         </div>
                       )}

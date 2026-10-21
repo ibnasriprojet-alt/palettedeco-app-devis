@@ -6,6 +6,7 @@ import { registerCockpit } from "./cockpit.js";
 import { syncPaymentTransaction, removePaymentTransaction } from "./bank-sync.js";
 import { loadAppSettings, resolveRecipient } from "./settings.js";
 import { buildFacturxXml, facturxXmp } from "./facturx.js";
+import { rewrite, learningPairs } from "./text-assist.js";
 
 pg.types.setTypeParser(1082, (v) => v);
 
@@ -2391,6 +2392,54 @@ async function sendMail(args: {
 }
 
 registerCockpit({ app, pool, loadCompany: () => loadCompany(), moneyStr, sendMail });
+
+/* ---------- Assistant de redaction (descriptifs de devis) ---------- */
+/* Moteur maison, aucune dependance externe : la reformulation reste dans
+   l'application. La proposition est TOUJOURS validee par l'utilisateur avant
+   d'etre appliquee ; c'est cette validation qui alimente la memoire apprise. */
+
+async function loadLearnings() {
+  const { rows } = await pool.query(
+    "SELECT from_text, to_text FROM correction_learnings ORDER BY hits DESC, id DESC LIMIT 500",
+  );
+  return rows;
+}
+
+app.post("/api/assist/rewrite", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const text = String((body as { text?: unknown }).text || "");
+  if (text.length > 5000) return c.json({ error: "Texte trop long (5000 caracteres max)." }, 413);
+  const learnings = await loadLearnings();
+  const result = rewrite(text, learnings);
+  return c.json(result);
+});
+
+app.post("/api/assist/learn", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const before = String((body as { before?: unknown }).before || "");
+  const after = String((body as { after?: unknown }).after || "");
+  const pairs = learningPairs(before, after);
+  if (!pairs.length) return c.json({ ok: true, learned: 0 });
+  let learned = 0;
+  for (const p of pairs) {
+    await pool.query(
+      `INSERT INTO correction_learnings (from_text, to_text)
+       VALUES ($1, $2)
+       ON CONFLICT (lower(from_text), to_text)
+       DO UPDATE SET hits = correction_learnings.hits + 1, updated_at = now()`,
+      [p.from_text, p.to_text],
+    );
+    learned++;
+  }
+  return c.json({ ok: true, learned });
+});
+
+app.get("/api/assist/learnings", async (c) => {
+  const { rows } = await pool.query(
+    "SELECT id, from_text, to_text, hits FROM correction_learnings ORDER BY hits DESC, id DESC LIMIT 500",
+  );
+  return c.json({ items: rows });
+});
 
 app.notFound((c) => c.json({ error: "Route introuvable" }, 404));
 

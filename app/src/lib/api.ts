@@ -272,6 +272,18 @@ export const api = {
     const name = (m?.[1] || fallback).trim();
     return { url: URL.createObjectURL(blob), filename: /\.pdf$/i.test(name) ? name : `${name}.pdf` };
   },
+
+  /* ---------- Assistant de redaction ---------- */
+  assistRewrite: (text: string) =>
+    request<{ original: string; suggestion: string; changes: boolean }>("/api/assist/rewrite", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  assistLearn: (before: string, after: string) =>
+    request<{ ok: boolean; learned: number }>("/api/assist/learn", {
+      method: "POST",
+      body: JSON.stringify({ before, after }),
+    }),
 };
 
 export const statusLabels: Record<string, string> = {
